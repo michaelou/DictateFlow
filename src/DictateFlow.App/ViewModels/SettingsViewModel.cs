@@ -21,7 +21,8 @@ public sealed record MicrophoneOption(string? DeviceId, string DisplayName);
 /// General/Recording page, the Speech page, the LLM page (endpoint, key, deployment,
 /// temperature, max tokens, timeout, test connection) and the Prompts page (loaded modes,
 /// active-mode selector, reload, open-folder, and the Prompt Tester that runs a pasted
-/// transcript through the real resolver and LLM provider). Save persists through
+/// transcript through the real resolver and LLM provider) and the Output page (provider and
+/// delivery-mode selectors, read live by the pipeline on every run). Save persists through
 /// <see cref="ISettingsService"/>, whose <c>SettingsChanged</c> event re-arms the hotkey
 /// without a restart.
 /// </summary>
@@ -36,6 +37,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isPushToTalk;
+    private bool _isClipboardPasteOutput;
+    private bool _isAutomaticOutput;
 
     /// <summary>Initializes a new instance of the <see cref="SettingsViewModel"/> class.</summary>
     /// <param name="settingsService">Persists and reloads application settings.</param>
@@ -94,6 +97,12 @@ public partial class SettingsViewModel : ObservableObject
         _promptModes = _promptModeStore.GetAll();
         _selectedPromptMode = FindMode(_settingsService.Current.ActivePromptMode);
         _testerMode = _selectedPromptMode;
+
+        var output = _settingsService.Current.Output;
+        _isClipboardPasteOutput = !string.Equals(
+            output.Provider, OutputProviderNames.SimulatedKeyboard, StringComparison.OrdinalIgnoreCase);
+        _isAutomaticOutput = !string.Equals(
+            output.Mode, OutputModes.Preview, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
@@ -219,6 +228,46 @@ public partial class SettingsViewModel : ObservableObject
         set => IsPushToTalk = !value;
     }
 
+    /// <summary>Gets or sets a value indicating whether the clipboard-paste output provider is selected.</summary>
+    public bool IsClipboardPasteOutput
+    {
+        get => _isClipboardPasteOutput;
+        set
+        {
+            if (SetProperty(ref _isClipboardPasteOutput, value))
+            {
+                OnPropertyChanged(nameof(IsSimulatedKeyboardOutput));
+            }
+        }
+    }
+
+    /// <summary>Gets or sets a value indicating whether the simulated-keyboard output provider is selected.</summary>
+    public bool IsSimulatedKeyboardOutput
+    {
+        get => !_isClipboardPasteOutput;
+        set => IsClipboardPasteOutput = !value;
+    }
+
+    /// <summary>Gets or sets a value indicating whether text is delivered automatically, without a preview.</summary>
+    public bool IsAutomaticOutput
+    {
+        get => _isAutomaticOutput;
+        set
+        {
+            if (SetProperty(ref _isAutomaticOutput, value))
+            {
+                OnPropertyChanged(nameof(IsPreviewOutput));
+            }
+        }
+    }
+
+    /// <summary>Gets or sets a value indicating whether the preview dialog is shown before delivery.</summary>
+    public bool IsPreviewOutput
+    {
+        get => !_isAutomaticOutput;
+        set => IsAutomaticOutput = !value;
+    }
+
     /// <summary>Raised when the window hosting this view model should close.</summary>
     public event EventHandler? CloseRequested;
 
@@ -304,6 +353,10 @@ public partial class SettingsViewModel : ObservableObject
         ApplySpeechSettings(_settingsService.Current.Speech);
         ApplyLlmSettings(_settingsService.Current.Llm);
         _settingsService.Current.ActivePromptMode = SelectedPromptMode?.Name ?? DefaultPromptModes.RawModeName;
+
+        var output = _settingsService.Current.Output;
+        output.Provider = IsClipboardPasteOutput ? OutputProviderNames.ClipboardPaste : OutputProviderNames.SimulatedKeyboard;
+        output.Mode = IsAutomaticOutput ? OutputModes.Automatic : OutputModes.Preview;
 
         await _settingsService.SaveAsync(cancellationToken);
         _logger.LogInformation("Settings saved from Settings window");

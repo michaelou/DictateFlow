@@ -339,6 +339,47 @@
                              Text="{Binding TesterResult, Mode=OneWay}" />
                 </StackPanel>
 
+                <!-- Output (text delivery) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Output">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Output" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="How dictated text is delivered into the application that had focus. Changes apply from the next dictation." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Provider" />
+                    <RadioButton Content="Clipboard paste (fast; briefly replaces the clipboard, then restores it)"
+                                 GroupName="OutputProvider"
+                                 IsChecked="{Binding IsClipboardPasteOutput}" />
+                    <RadioButton Margin="0,4,0,0"
+                                 Content="Simulated keyboard (slower; types the text — works where paste is blocked)"
+                                 GroupName="OutputProvider"
+                                 IsChecked="{Binding IsSimulatedKeyboardOutput}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Mode" />
+                    <RadioButton Content="Automatic (deliver immediately after enhancement)"
+                                 GroupName="OutputMode"
+                                 IsChecked="{Binding IsAutomaticOutput}" />
+                    <RadioButton Margin="0,4,0,0"
+                                 Content="Preview (review and edit in a dialog before delivery)"
+                                 GroupName="OutputMode"
+                                 IsChecked="{Binding IsPreviewOutput}" />
+                </StackPanel>
+
                 <!-- Placeholder for sections that arrive in later milestones -->
                 <StackPanel>
                     <StackPanel.Style>
@@ -355,6 +396,9 @@
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Prompts">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Output">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </Style.Triggers>
