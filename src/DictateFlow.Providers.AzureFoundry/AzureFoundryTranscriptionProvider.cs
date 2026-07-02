@@ -11,15 +11,22 @@ using Microsoft.Extensions.Logging;
 namespace DictateFlow.Providers.AzureFoundry;
 
 /// <summary>
-/// <see cref="ITranscriptionProvider"/> backed by an Azure AI Foundry deployment
-/// (e.g. MAI-Transcribe) through the OpenAI-compatible audio transcription surface.
-/// Reads <see cref="SpeechSettings"/> on every call, maps all transport failures to
-/// <see cref="ProviderException"/>, and never logs the API key or the transcript above Debug.
+/// <see cref="ITranscriptionProvider"/> backed by the Azure AI Speech
+/// <see href="https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create">Fast Transcription</see>
+/// API (<c>/speechtotext/transcriptions:transcribe</c>). Reads <see cref="SpeechSettings"/> on
+/// every call, maps all transport failures to <see cref="ProviderException"/>, and never logs
+/// the API key or the transcript above Debug.
 /// </summary>
 public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 {
     /// <summary>API version sent when the endpoint does not already specify one. A settings override can be added later if needed.</summary>
-    public const string DefaultApiVersion = "2024-06-01";
+    public const string DefaultApiVersion = "2025-10-15";
+
+    /// <summary>Relative route for the Fast Transcription operation.</summary>
+    private const string TranscribeRoute = "speechtotext/transcriptions:transcribe";
+
+    /// <summary>Header carrying the Speech resource key.</summary>
+    private const string SubscriptionKeyHeader = "Ocp-Apim-Subscription-Key";
 
     private const string ProviderName = "AzureFoundry";
 
@@ -33,6 +40,11 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     {
         PropertyNameCaseInsensitive = true,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
+
+    private static readonly JsonSerializerOptions DefinitionJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     private readonly HttpClient _httpClient;
@@ -90,9 +102,9 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
             {
-                Content = BuildContent(audioBytes, speech.Language),
+                Content = BuildContent(audioBytes, speech.Language, speech.DeploymentName),
             };
-            request.Headers.TryAddWithoutValidation("api-key", speech.ApiKey);
+            request.Headers.TryAddWithoutValidation(SubscriptionKeyHeader, speech.ApiKey);
 
             using var response = await _httpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
             stopwatch.Stop();
@@ -149,9 +161,9 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     }
 
     /// <summary>
-    /// Builds the request URI. When the configured endpoint is just a host, the standard
-    /// deployments route is appended; when the user pasted a complete target URI (a path is
-    /// already present), it is used as-is and only the api-version query is added if missing.
+    /// Builds the Fast Transcription request URI. A complete <c>…:transcribe</c> URL is used
+    /// as-is (api-version added if missing); otherwise the endpoint is treated as the resource
+    /// base and the <c>speechtotext/transcriptions:transcribe</c> route is appended.
     /// </summary>
     private Uri BuildRequestUri(SpeechSettings speech)
     {
@@ -165,9 +177,10 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
                 isConfigurationError: true);
         }
 
-        if (endpoint.AbsolutePath.Length > 1)
+        // A complete transcribe URL was pasted: use it as-is, adding api-version if missing.
+        if (endpoint.AbsolutePath.EndsWith("transcriptions:transcribe", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug("Speech endpoint contains a path; using it as the full target URI");
+            _logger.LogDebug("Speech endpoint is a complete transcribe URL; using it as the full target URI");
             if (endpoint.Query.Contains("api-version", StringComparison.OrdinalIgnoreCase))
             {
                 return endpoint;
@@ -177,75 +190,70 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
             return new Uri($"{endpoint.AbsoluteUri}{separator}api-version={DefaultApiVersion}");
         }
 
-        if (string.IsNullOrWhiteSpace(speech.DeploymentName))
-        {
-            throw new ProviderException(
-                ProviderName,
-                "No deployment name is configured. Enter the model deployment name in Settings → Speech.",
-                isConfigurationError: true);
-        }
-
-        _logger.LogDebug("Speech endpoint is a bare host; building the deployments route");
+        _logger.LogDebug("Speech endpoint is a resource base; appending the Fast Transcription route");
         var baseUrl = endpointText.TrimEnd('/');
-        return new Uri(
-            $"{baseUrl}/openai/deployments/{Uri.EscapeDataString(speech.DeploymentName.Trim())}/audio/transcriptions?api-version={DefaultApiVersion}");
+        return new Uri($"{baseUrl}/{TranscribeRoute}?api-version={DefaultApiVersion}");
     }
 
     /// <summary>
-    /// Builds the multipart/form-data body expected by the transcription endpoint. Field
-    /// names are explicitly quoted — <see cref="MultipartFormDataContent"/> leaves them bare,
-    /// which some OpenAI-compatible multipart parsers reject.
+    /// Builds the multipart/form-data body expected by the Fast Transcription endpoint: an
+    /// <c>audio</c> file part and a <c>definition</c> JSON part. Field names are explicitly
+    /// quoted — <see cref="MultipartFormDataContent"/> leaves them bare, which some multipart
+    /// parsers reject. When a model (deployment) name is set it selects the enhanced model.
     /// </summary>
-    private static MultipartFormDataContent BuildContent(byte[] audioBytes, string language)
+    private static MultipartFormDataContent BuildContent(byte[] audioBytes, string language, string model)
     {
         var file = new ByteArrayContent(audioBytes);
         file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
         file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
         {
-            Name = "\"file\"",
+            Name = "\"audio\"",
             FileName = "\"audio.wav\"",
         };
 
-        var content = new MultipartFormDataContent { file };
-        AddStringField(content, "response_format", "json");
+        var definitionJson = JsonSerializer.Serialize(
+            new TranscribeDefinition(
+                string.IsNullOrWhiteSpace(language) ? null : [language.Trim()],
+                string.IsNullOrWhiteSpace(model)
+                    ? null
+                    : new EnhancedModeDefinition(true, model.Trim(), "verbatim")),
+            DefinitionJsonOptions);
 
-        if (!string.IsNullOrWhiteSpace(language))
-        {
-            AddStringField(content, "language", language);
-        }
+        var definition = new StringContent(definitionJson);
+        definition.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"definition\"" };
 
-        return content;
+        return new MultipartFormDataContent { file, definition };
     }
 
-    /// <summary>Adds a plain form field with a quoted name.</summary>
-    private static void AddStringField(MultipartFormDataContent content, string name, string value)
-    {
-        var part = new StringContent(value);
-        part.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = $"\"{name}\"" };
-        content.Add(part);
-    }
-
-    /// <summary>Parses the JSON response, tolerating extra fields, with a WAV-length duration fallback.</summary>
+    /// <summary>Parses the Fast Transcription JSON response, tolerating extra fields, with a WAV-length duration fallback.</summary>
     private TranscriptionResult ParseResponse(string json, int audioByteCount, string configuredLanguage)
     {
-        TranscriptionResponse? response;
+        FastTranscriptionResponse? response;
         try
         {
-            response = JsonSerializer.Deserialize<TranscriptionResponse>(json, JsonOptions);
+            response = JsonSerializer.Deserialize<FastTranscriptionResponse>(json, JsonOptions);
         }
         catch (JsonException ex)
         {
             throw new ProviderException(ProviderName, "The speech service returned an unreadable response.", ex);
         }
 
-        if (response?.Text is null)
+        // A valid Fast Transcription response always carries at least one of these fields; a
+        // reply with neither is unrecognized. An empty transcript (e.g. silence) is valid and
+        // must not fail — the "Test connection" check relies on that.
+        if (response is null || (response.CombinedPhrases is null && response.DurationMilliseconds is null))
         {
             throw new ProviderException(ProviderName, "The speech service response did not contain a transcript.");
         }
 
-        var duration = response.Duration
-            ?? Math.Max(0, audioByteCount - WavHeaderBytes) / (double)BytesPerSecond;
-        var language = response.Language
+        var text = response.CombinedPhrases is null
+            ? ""
+            : string.Join(" ", response.CombinedPhrases.Select(p => p.Text?.Trim()).Where(t => !string.IsNullOrEmpty(t)));
+
+        var duration = response!.DurationMilliseconds is { } ms
+            ? ms / 1000.0
+            : Math.Max(0, audioByteCount - WavHeaderBytes) / (double)BytesPerSecond;
+        var language = response.Phrases?.FirstOrDefault()?.Locale
             ?? (string.IsNullOrWhiteSpace(configuredLanguage) ? null : configuredLanguage);
 
         _usageSink.Record(new UsageRecord(
@@ -255,8 +263,8 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
             PromptTokens: null,
             CompletionTokens: null));
 
-        _logger.LogDebug("Transcript received: {CharCount} characters, {DurationSeconds:F1} s of audio", response.Text.Length, duration);
-        return new TranscriptionResult(response.Text, duration, language);
+        _logger.LogDebug("Transcript received: {CharCount} characters, {DurationSeconds:F1} s of audio", text.Length, duration);
+        return new TranscriptionResult(text, duration, language);
     }
 
     /// <summary>Copies the audio stream (from its current position) into a byte array.</summary>
@@ -274,9 +282,28 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
         return copy.ToArray();
     }
 
-    /// <summary>Wire shape of the transcription response; unknown fields are ignored.</summary>
-    private sealed record TranscriptionResponse(
-        [property: JsonPropertyName("text")] string? Text,
-        [property: JsonPropertyName("duration")] double? Duration,
-        [property: JsonPropertyName("language")] string? Language);
+    /// <summary>Wire shape of the <c>definition</c> form field sent with the request.</summary>
+    private sealed record TranscribeDefinition(
+        [property: JsonPropertyName("locales")] IReadOnlyList<string>? Locales,
+        [property: JsonPropertyName("enhancedMode")] EnhancedModeDefinition? EnhancedMode);
+
+    /// <summary>Selects an enhanced transcription model (e.g. MAI-Transcribe).</summary>
+    private sealed record EnhancedModeDefinition(
+        [property: JsonPropertyName("enabled")] bool Enabled,
+        [property: JsonPropertyName("model")] string Model,
+        [property: JsonPropertyName("transcribeStyle")] string TranscribeStyle);
+
+    /// <summary>Wire shape of the Fast Transcription response; unknown fields are ignored.</summary>
+    private sealed record FastTranscriptionResponse(
+        [property: JsonPropertyName("durationMilliseconds")] long? DurationMilliseconds,
+        [property: JsonPropertyName("combinedPhrases")] IReadOnlyList<CombinedPhrase>? CombinedPhrases,
+        [property: JsonPropertyName("phrases")] IReadOnlyList<TranscribedPhrase>? Phrases);
+
+    /// <summary>The channel-merged transcript text.</summary>
+    private sealed record CombinedPhrase(
+        [property: JsonPropertyName("text")] string? Text);
+
+    /// <summary>A recognized phrase; only its locale is consumed.</summary>
+    private sealed record TranscribedPhrase(
+        [property: JsonPropertyName("locale")] string? Locale);
 }

@@ -92,7 +92,71 @@ public sealed class AzureFoundryLLMProviderTests
         Assert.Equal("user", messages[1].GetProperty("role").GetString());
         Assert.Equal("user transcript", messages[1].GetProperty("content").GetString());
         Assert.Equal(0.2, body.RootElement.GetProperty("temperature").GetDouble());
-        Assert.Equal(1500, body.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(1500, body.RootElement.GetProperty("max_completion_tokens").GetInt32());
+        Assert.Equal("gpt-4o", body.RootElement.GetProperty("model").GetString());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ModelRejectsTemperature_RetriesOnceWithoutIt()
+    {
+        var badRequest = """{"error":{"message":"Unsupported value: 'temperature' does not support 0.2 with this model. Only the default (1) value is supported."}}""";
+        var responses = 0;
+        var handler = new FakeHttpMessageHandler((_, _) =>
+        {
+            responses++;
+            var (status, payload) = responses == 1
+                ? (HttpStatusCode.BadRequest, badRequest)
+                : (HttpStatusCode.OK, SuccessBody);
+            return Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json"),
+            });
+        });
+        var provider = CreateProvider(handler);
+
+        var result = await provider.ProcessAsync(Context(), CancellationToken.None);
+
+        Assert.Equal("enhanced text", result);
+        Assert.Equal(2, handler.Requests.Count);
+        using var first = JsonDocument.Parse(handler.Requests[0].Body);
+        Assert.True(first.RootElement.TryGetProperty("temperature", out _)); // first attempt sends it
+        using var second = JsonDocument.Parse(handler.Requests[1].Body);
+        Assert.False(second.RootElement.TryGetProperty("temperature", out _)); // retry omits it
+    }
+
+    [Fact]
+    public async Task ProcessAsync_BadRequest_SurfacesServiceErrorMessage()
+    {
+        var handler = new FakeHttpMessageHandler(
+            HttpStatusCode.BadRequest,
+            """{"error":{"message":"max_tokens is not supported with this model."}}""");
+        var provider = CreateProvider(handler);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => provider.ProcessAsync(Context(), CancellationToken.None));
+
+        Assert.Contains("max_tokens is not supported", ex.Message);
+        Assert.Single(handler.Requests); // no temperature retry for a non-temperature 400
+    }
+
+    [Fact]
+    public async Task ProcessAsync_V1BaseEndpoint_AppendsRouteAndSendsModelInBody()
+    {
+        _appSettings.Llm.Endpoint = "https://myresource.services.ai.azure.com/openai/v1";
+        _appSettings.Llm.DeploymentName = "gpt-5.4-mini";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        await provider.ProcessAsync(Context(), CancellationToken.None);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(
+            "https://myresource.services.ai.azure.com/openai/v1/chat/completions",
+            request.Uri!.ToString());
+        Assert.Equal("test-key", request.ApiKeyHeader);
+
+        using var body = JsonDocument.Parse(request.Body);
+        Assert.Equal("gpt-5.4-mini", body.RootElement.GetProperty("model").GetString());
     }
 
     [Fact]

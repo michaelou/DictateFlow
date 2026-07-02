@@ -69,10 +69,14 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
                 isConfigurationError: true);
         }
 
-        var requestBody = JsonSerializer.Serialize(new ChatRequest(
-            [new ChatMessage("system", context.SystemPrompt), new ChatMessage("user", context.Transcript)],
-            context.Temperature,
-            context.MaxTokens));
+        // The deployment/model name travels in the body. The classic Azure route ignores it
+        // (the deployment is in the URL); the OpenAI v1 surface requires it.
+        var model = string.IsNullOrWhiteSpace(llm.DeploymentName) ? null : llm.DeploymentName.Trim();
+        var messages = new[]
+        {
+            new ChatMessage("system", context.SystemPrompt),
+            new ChatMessage("user", context.Transcript),
+        };
 
         // The user-facing timeout: enforced here (instead of at pipeline-build time) so a
         // changed Llm.TimeoutSeconds takes effect immediately, without a restart.
@@ -85,35 +89,55 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            // The GPT-5 reasoning series (and similar) reject a non-default 'temperature'. When
+            // the service says so, retry once without it so those models work while models that
+            // do honour temperature (e.g. gpt-4o) still receive it.
+            var includeTemperature = true;
+            while (true)
             {
-                Content = new StringContent(requestBody, Encoding.UTF8, "application/json"),
-            };
-            request.Headers.TryAddWithoutValidation("api-key", llm.ApiKey);
+                var requestBody = JsonSerializer.Serialize(new ChatRequest(
+                    model, messages, includeTemperature ? context.Temperature : null, context.MaxTokens));
 
-            using var response = await _httpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
-            stopwatch.Stop();
-            _logger.LogDebug(
-                "Chat completion request finished: HTTP {StatusCode} in {ElapsedMs} ms (mode '{ModeName}')",
-                (int)response.StatusCode, stopwatch.ElapsedMilliseconds, context.ModeName);
+                using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = new StringContent(requestBody, Encoding.UTF8, "application/json"),
+                };
+                request.Headers.TryAddWithoutValidation("api-key", llm.ApiKey);
 
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            {
-                throw new ProviderException(
-                    ProviderName,
-                    $"The LLM service rejected the request ({(int)response.StatusCode}). Check your API key in Settings → LLM.",
-                    isConfigurationError: true);
+                using var response = await _httpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
+                _logger.LogDebug(
+                    "Chat completion request finished: HTTP {StatusCode} in {ElapsedMs} ms (mode '{ModeName}')",
+                    (int)response.StatusCode, stopwatch.ElapsedMilliseconds, context.ModeName);
+
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    throw new ProviderException(
+                        ProviderName,
+                        $"The LLM service rejected the request ({(int)response.StatusCode}). Check your API key in Settings → LLM.",
+                        isConfigurationError: true);
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+                    if (response.StatusCode == HttpStatusCode.BadRequest
+                        && includeTemperature
+                        && errorBody.Contains("temperature", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogDebug("Model rejected 'temperature'; retrying once without it");
+                        includeTemperature = false;
+                        continue;
+                    }
+
+                    throw new ProviderException(
+                        ProviderName,
+                        $"The LLM service returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{DescribeError(errorBody)} Check the endpoint, deployment name and options in Settings → LLM.");
+                }
+
+                stopwatch.Stop();
+                var json = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+                return ParseResponse(json);
             }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new ProviderException(
-                    ProviderName,
-                    $"The LLM service returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). Try again; if it persists, check the endpoint and deployment name in Settings → LLM.");
-            }
-
-            var json = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
-            return ParseResponse(json);
         }
         catch (ProviderException)
         {
@@ -146,9 +170,10 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
     }
 
     /// <summary>
-    /// Builds the request URI. When the configured endpoint is just a host, the standard
-    /// deployments route is appended; when the user pasted a complete target URI (a path is
-    /// already present), it is used as-is and only the api-version query is added if missing.
+    /// Builds the chat-completions request URI, supporting the three shapes users paste:
+    /// a complete <c>…/chat/completions</c> URL (used as-is; the classic deployments route also
+    /// gets an api-version), the OpenAI v1 base <c>…/openai/v1</c> (the route is appended and the
+    /// model travels in the body), and a bare host (the classic Azure deployments route is built).
     /// </summary>
     private Uri BuildRequestUri(LlmSettings llm)
     {
@@ -162,18 +187,59 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
                 isConfigurationError: true);
         }
 
-        if (endpoint.AbsolutePath.Length > 1)
+        var path = endpoint.AbsolutePath.TrimEnd('/');
+
+        // A complete chat-completions URL was pasted: use it as-is. Only the classic
+        // "/deployments/…" route carries an api-version; the v1 surface does not.
+        if (path.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug("LLM endpoint contains a path; using it as the full target URI");
-            if (endpoint.Query.Contains("api-version", StringComparison.OrdinalIgnoreCase))
+            var isClassic = path.Contains("/deployments/", StringComparison.OrdinalIgnoreCase);
+            if (!isClassic)
             {
-                return endpoint;
+                RequireDeployment(llm);
             }
 
-            var separator = string.IsNullOrEmpty(endpoint.Query) ? "?" : "&";
-            return new Uri($"{endpoint.AbsoluteUri}{separator}api-version={DefaultApiVersion}");
+            if (isClassic && !endpoint.Query.Contains("api-version", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = string.IsNullOrEmpty(endpoint.Query) ? "?" : "&";
+                return new Uri($"{endpoint.AbsoluteUri}{separator}api-version={DefaultApiVersion}");
+            }
+
+            return endpoint;
         }
 
+        // The OpenAI v1 base (…/openai/v1): append the route; the model goes in the body.
+        if (path.EndsWith("/openai/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireDeployment(llm);
+            _logger.LogDebug("LLM endpoint is the OpenAI v1 base; appending the chat/completions route");
+            return new Uri($"{endpointText.TrimEnd('/')}/chat/completions");
+        }
+
+        // A bare host: build the classic Azure OpenAI deployments route.
+        if (endpoint.AbsolutePath.Length <= 1)
+        {
+            RequireDeployment(llm);
+            _logger.LogDebug("LLM endpoint is a bare host; building the deployments route");
+            var baseUrl = endpointText.TrimEnd('/');
+            return new Uri(
+                $"{baseUrl}/openai/deployments/{Uri.EscapeDataString(llm.DeploymentName.Trim())}/chat/completions?api-version={DefaultApiVersion}");
+        }
+
+        // Some other custom path: use it as-is, appending api-version if missing.
+        _logger.LogDebug("LLM endpoint contains a custom path; using it as the full target URI");
+        if (endpoint.Query.Contains("api-version", StringComparison.OrdinalIgnoreCase))
+        {
+            return endpoint;
+        }
+
+        var sep = string.IsNullOrEmpty(endpoint.Query) ? "?" : "&";
+        return new Uri($"{endpoint.AbsoluteUri}{sep}api-version={DefaultApiVersion}");
+    }
+
+    /// <summary>Throws a configuration error when no deployment/model name is set.</summary>
+    private void RequireDeployment(LlmSettings llm)
+    {
         if (string.IsNullOrWhiteSpace(llm.DeploymentName))
         {
             throw new ProviderException(
@@ -181,11 +247,45 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
                 "No deployment name is configured. Enter the model deployment name in Settings → LLM.",
                 isConfigurationError: true);
         }
+    }
 
-        _logger.LogDebug("LLM endpoint is a bare host; building the deployments route");
-        var baseUrl = endpointText.TrimEnd('/');
-        return new Uri(
-            $"{baseUrl}/openai/deployments/{Uri.EscapeDataString(llm.DeploymentName.Trim())}/chat/completions?api-version={DefaultApiVersion}");
+    /// <summary>
+    /// Extracts a short, human-readable detail from an error response body — the service's
+    /// <c>error.message</c> when present, otherwise a trimmed snippet — prefixed with a space
+    /// so it reads cleanly appended to the status line (empty when there is nothing useful).
+    /// </summary>
+    private static string DescribeError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "";
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var error))
+            {
+                if (error.ValueKind == JsonValueKind.Object
+                    && error.TryGetProperty("message", out var message)
+                    && message.ValueKind == JsonValueKind.String)
+                {
+                    return $" {message.GetString()}";
+                }
+
+                if (error.ValueKind == JsonValueKind.String)
+                {
+                    return $" {error.GetString()}";
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON — fall through to the raw snippet.
+        }
+
+        var trimmed = body.Trim();
+        return trimmed.Length > 300 ? $" {trimmed[..300]}…" : $" {trimmed}";
     }
 
     /// <summary>
@@ -227,11 +327,16 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
         return content;
     }
 
-    /// <summary>Wire shape of the chat-completions request.</summary>
+    /// <summary>
+    /// Wire shape of the chat-completions request. The model and temperature are omitted when
+    /// null (the v1 surface requires the model in the body; reasoning models reject temperature).
+    /// <c>max_completion_tokens</c> is the modern token limit accepted across current models.
+    /// </summary>
     private sealed record ChatRequest(
+        [property: JsonPropertyName("model"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model,
         [property: JsonPropertyName("messages")] IReadOnlyList<ChatMessage> Messages,
-        [property: JsonPropertyName("temperature")] double Temperature,
-        [property: JsonPropertyName("max_tokens")] int MaxTokens);
+        [property: JsonPropertyName("temperature"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? Temperature,
+        [property: JsonPropertyName("max_completion_tokens")] int MaxTokens);
 
     /// <summary>One chat message.</summary>
     private sealed record ChatMessage(

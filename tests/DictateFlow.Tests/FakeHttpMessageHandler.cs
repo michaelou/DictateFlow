@@ -7,7 +7,9 @@ namespace DictateFlow.Tests;
 /// <param name="ApiKeyHeader">Value of the <c>api-key</c> header, if present.</param>
 /// <param name="Body">The full (multipart) body as a string.</param>
 /// <param name="ContentType">The request content type, including the boundary.</param>
-public sealed record RecordedRequest(Uri? Uri, string? ApiKeyHeader, string Body, string? ContentType);
+/// <param name="Headers">All request headers, keyed case-insensitively (joined if multi-valued).</param>
+public sealed record RecordedRequest(
+    Uri? Uri, string? ApiKeyHeader, string Body, string? ContentType, IReadOnlyDictionary<string, string> Headers);
 
 /// <summary>
 /// <see cref="HttpMessageHandler"/> test double that records every request (URI, headers,
@@ -45,11 +47,14 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
             ? ""
             : await request.Content.ReadAsStringAsync(CancellationToken.None);
         request.Headers.TryGetValues("api-key", out var apiKeyValues);
+        var headers = request.Headers.ToDictionary(
+            h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
         Requests.Add(new RecordedRequest(
             request.RequestUri,
             apiKeyValues?.FirstOrDefault(),
             body,
-            request.Content?.Headers.ContentType?.ToString()));
+            request.Content?.Headers.ContentType?.ToString(),
+            headers));
 
         return await _responder(request, cancellationToken);
     }

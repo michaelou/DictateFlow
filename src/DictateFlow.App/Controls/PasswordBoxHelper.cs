@@ -11,11 +11,16 @@ namespace DictateFlow.App.Controls;
 public static class PasswordBoxHelper
 {
     /// <summary>Identifies the <c>BoundPassword</c> attached property.</summary>
+    // The default is null (not string.Empty) on purpose: when no key is configured yet the
+    // binding pushes "" on load, and a dependency property whose new value equals its default
+    // does NOT raise the change callback. A null default guarantees "" != default, so
+    // OnBoundPasswordChanged always fires once and wires up PasswordChanged — otherwise the
+    // very first (empty) case would never attach the handler and typed keys would be dropped.
     public static readonly DependencyProperty BoundPasswordProperty = DependencyProperty.RegisterAttached(
         "BoundPassword",
         typeof(string),
         typeof(PasswordBoxHelper),
-        new FrameworkPropertyMetadata(string.Empty, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnBoundPasswordChanged));
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnBoundPasswordChanged));
 
     /// <summary>Guards against re-entrancy while the box itself pushes a change to the binding.</summary>
     private static readonly DependencyProperty IsUpdatingProperty = DependencyProperty.RegisterAttached(
@@ -38,9 +43,10 @@ public static class PasswordBoxHelper
         }
 
         box.PasswordChanged -= OnPasswordChanged;
-        if (!(bool)box.GetValue(IsUpdatingProperty))
+        var newValue = (string?)e.NewValue ?? string.Empty;
+        if (!(bool)box.GetValue(IsUpdatingProperty) && box.Password != newValue)
         {
-            box.Password = (string?)e.NewValue ?? string.Empty;
+            box.Password = newValue;
         }
 
         box.PasswordChanged += OnPasswordChanged;

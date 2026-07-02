@@ -21,7 +21,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     {
         Speech =
         {
-            Endpoint = "https://myresource.services.ai.azure.com",
+            Endpoint = "https://myresource.cognitiveservices.azure.com",
             ApiKey = "test-key",
             DeploymentName = "mai-transcribe",
             Language = "en-US",
@@ -59,66 +59,82 @@ public sealed class AzureFoundryTranscriptionProviderTests
 
     private static MemoryStream OneSecondWav() => SilentWavFactory.Create(TimeSpan.FromSeconds(1));
 
+    private const string SuccessBody =
+        """{"durationMilliseconds":1000,"combinedPhrases":[{"text":"hello"}]}""";
+
     [Fact]
-    public async Task TranscribeAsync_BuildsDeploymentUrlHeaderAndMultipartFields()
+    public async Task TranscribeAsync_BuildsTranscribeUrlHeaderAndMultipartFields()
     {
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello"}""");
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
 
         var request = Assert.Single(handler.Requests);
         Assert.Equal(
-            "https://myresource.services.ai.azure.com/openai/deployments/mai-transcribe/audio/transcriptions?api-version=2024-06-01",
+            "https://myresource.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15",
             request.Uri!.ToString());
-        Assert.Equal("test-key", request.ApiKeyHeader);
+        Assert.Equal("test-key", request.Headers["Ocp-Apim-Subscription-Key"]);
         Assert.StartsWith("multipart/form-data", request.ContentType);
-        Assert.Contains("name=\"file\"", request.Body);
+        Assert.Contains("name=\"audio\"", request.Body);
         Assert.Contains("filename=\"audio.wav\"", request.Body);
         Assert.Contains("Content-Type: audio/wav", request.Body);
-        Assert.Contains("name=\"response_format\"", request.Body);
-        Assert.Contains("json", request.Body);
-        Assert.Contains("name=\"language\"", request.Body);
+        Assert.Contains("name=\"definition\"", request.Body);
+        Assert.Contains("\"locales\"", request.Body);
         Assert.Contains("en-US", request.Body);
+        Assert.Contains("\"enhancedMode\"", request.Body); // DeploymentName is set
+        Assert.Contains("mai-transcribe", request.Body);
     }
 
     [Fact]
-    public async Task TranscribeAsync_EmptyLanguage_OmitsLanguageField()
+    public async Task TranscribeAsync_EmptyLanguage_OmitsLocales()
     {
         _appSettings.Speech.Language = "";
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello"}""");
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
 
-        Assert.DoesNotContain("name=\"language\"", handler.Requests[0].Body);
+        Assert.DoesNotContain("\"locales\"", handler.Requests[0].Body);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_EmptyDeployment_OmitsEnhancedMode()
+    {
+        _appSettings.Speech.DeploymentName = "";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.DoesNotContain("\"enhancedMode\"", handler.Requests[0].Body);
     }
 
     [Fact]
     public async Task TranscribeAsync_EndpointWithFullPath_UsedAsIsWithApiVersionAppended()
     {
-        _appSettings.Speech.Endpoint = "https://myresource.services.ai.azure.com/openai/deployments/custom/audio/transcriptions";
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello"}""");
+        _appSettings.Speech.Endpoint = "https://myresource.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
 
         Assert.Equal(
-            "https://myresource.services.ai.azure.com/openai/deployments/custom/audio/transcriptions?api-version=2024-06-01",
+            "https://myresource.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15",
             handler.Requests[0].Uri!.ToString());
     }
 
     [Fact]
     public async Task TranscribeAsync_EndpointWithExistingApiVersion_NotDuplicated()
     {
-        _appSettings.Speech.Endpoint = "https://host/openai/deployments/d/audio/transcriptions?api-version=preview";
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello"}""");
+        _appSettings.Speech.Endpoint = "https://host/speechtotext/transcriptions:transcribe?api-version=preview";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
 
         Assert.Equal(
-            "https://host/openai/deployments/d/audio/transcriptions?api-version=preview",
+            "https://host/speechtotext/transcriptions:transcribe?api-version=preview",
             handler.Requests[0].Uri!.ToString());
     }
 
@@ -127,7 +143,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     {
         var handler = new FakeHttpMessageHandler(
             HttpStatusCode.OK,
-            """{"text":"hello world","duration":2.5,"language":"en","extra_field":123}""");
+            """{"durationMilliseconds":2500,"combinedPhrases":[{"text":"hello world"}],"phrases":[{"locale":"en"}],"extra_field":123}""");
         var provider = CreateProvider(handler);
 
         var result = await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
@@ -140,7 +156,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_NoDurationInResponse_ComputedFromWavLength()
     {
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello"}""");
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"combinedPhrases":[{"text":"hello"}]}""");
         var provider = CreateProvider(handler);
 
         var result = await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
@@ -154,7 +170,8 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_Success_ReportsAudioDurationUsage()
     {
-        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello","duration":2.5}""");
+        var handler = new FakeHttpMessageHandler(
+            HttpStatusCode.OK, """{"durationMilliseconds":2500,"combinedPhrases":[{"text":"hello"}]}""");
         var provider = CreateProvider(handler);
 
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
@@ -278,12 +295,25 @@ public sealed class AzureFoundryTranscriptionProviderTests
     }
 
     [Fact]
-    public async Task TranscribeAsync_ResponseWithoutText_ProviderException()
+    public async Task TranscribeAsync_UnrecognizedResponse_ProviderException()
     {
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"status":"ok"}""");
         var provider = CreateProvider(handler);
 
         await Assert.ThrowsAsync<ProviderException>(
             () => provider.TranscribeAsync(OneSecondWav(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_EmptyTranscript_ReturnsEmptyTextWithoutThrowing()
+    {
+        // Silence yields a well-formed 200 with no phrases; the Test connection check relies on
+        // this not being treated as a failure.
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"durationMilliseconds":500,"combinedPhrases":[]}""");
+        var provider = CreateProvider(handler);
+
+        var result = await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.Equal("", result.Text);
     }
 }
