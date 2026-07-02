@@ -152,6 +152,193 @@
                                Text="{Binding ValidationError}" />
                 </StackPanel>
 
+                <!-- LLM (enhancement provider) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="LLM">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="LLM enhancement" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Azure AI Foundry chat completions. Leave the endpoint empty to use the built-in mock provider." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
+                    <TextBox Width="340"
+                             HorizontalAlignment="Left"
+                             Text="{Binding LlmEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                    <PasswordBox Width="340"
+                                 HorizontalAlignment="Left"
+                                 controls:PasswordBoxHelper.BoundPassword="{Binding LlmApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
+                    <TextBox Width="200"
+                             HorizontalAlignment="Left"
+                             Text="{Binding LlmDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–2)" />
+                    <StackPanel Orientation="Horizontal">
+                        <Slider Width="220"
+                                VerticalAlignment="Center"
+                                Minimum="0"
+                                Maximum="2"
+                                TickFrequency="0.1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding LlmTemperature}" />
+                        <TextBox Width="60"
+                                 Margin="8,0,0,0"
+                                 Text="{Binding LlmTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Default for modes without their own temperature." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding LlmMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding LlmTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button Width="140"
+                            Margin="0,16,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Test connection"
+                            Command="{Binding TestLlmConnectionCommand}" />
+                    <TextBlock Margin="0,8,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding LlmTestResult}" />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Prompts page: loaded modes, active-mode selector, and the Prompt Tester -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Prompts">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Prompt modes" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="One JSON file per mode in the prompts folder. Edit or add files, then Reload to pick them up." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Active mode" />
+                    <ComboBox Width="220"
+                              HorizontalAlignment="Left"
+                              DisplayMemberPath="Name"
+                              ItemsSource="{Binding PromptModes}"
+                              SelectedItem="{Binding SelectedPromptMode}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Loaded modes" />
+                    <ItemsControl ItemsSource="{Binding PromptModes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                    <TextBlock Margin="8,0,0,0"
+                                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Description}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <Button Width="88"
+                                Content="Reload"
+                                Command="{Binding ReloadPromptsCommand}" />
+                        <Button Width="140"
+                                Margin="8,0,0,0"
+                                Content="Open prompts folder"
+                                Command="{Binding OpenPromptsFolderCommand}" />
+                    </StackPanel>
+
+                    <Separator Margin="0,16,0,8" />
+
+                    <TextBlock FontSize="15"
+                               FontWeight="SemiBold"
+                               Text="Prompt Tester" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Paste a transcript and run it through the resolver and LLM — no recording needed." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Transcript" />
+                    <TextBox Height="70"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding TesterTranscript, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <ComboBox Width="180"
+                                  VerticalAlignment="Center"
+                                  DisplayMemberPath="Name"
+                                  ItemsSource="{Binding PromptModes}"
+                                  SelectedItem="{Binding TesterMode}" />
+                        <Button Width="88"
+                                Margin="8,0,0,0"
+                                Content="Run"
+                                Command="{Binding RunTesterCommand}" />
+                        <Button Width="88"
+                                Margin="8,0,0,0"
+                                Content="Cancel"
+                                Command="{Binding RunTesterCancelCommand}" />
+                    </StackPanel>
+
+                    <Expander Margin="0,8,0,0" Header="Resolved system prompt">
+                        <TextBox MaxHeight="120"
+                                 Margin="0,4,0,0"
+                                 AcceptsReturn="True"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Text="{Binding TesterResolvedPrompt, Mode=OneWay}" />
+                    </Expander>
+
+                    <TextBlock Margin="0,8,0,4" FontWeight="SemiBold" Text="Result" />
+                    <TextBox Height="90"
+                             AcceptsReturn="True"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding TesterResult, Mode=OneWay}" />
+                </StackPanel>
+
                 <!-- Placeholder for sections that arrive in later milestones -->
                 <StackPanel>
                     <StackPanel.Style>
@@ -162,6 +349,12 @@
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Speech">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="LLM">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Prompts">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </Style.Triggers>

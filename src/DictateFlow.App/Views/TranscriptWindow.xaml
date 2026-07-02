@@ -3,25 +3,63 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="DictateFlow — Transcript"
         Width="460"
-        Height="300"
+        Height="340"
         MinWidth="320"
-        MinHeight="200"
+        MinHeight="220"
         Topmost="True"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBox Grid.Row="0"
+        <!-- Warning banner: shown when LLM enhancement failed and the raw transcript is displayed -->
+        <Border Grid.Row="0"
+                Margin="0,0,0,8"
+                Padding="8"
+                Background="#FFF8E1"
+                BorderBrush="#E0B400"
+                BorderThickness="1"
+                CornerRadius="3">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Warning}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Foreground="#7A5C00"
+                       TextWrapping="Wrap"
+                       Text="{Binding Warning}" />
+        </Border>
+
+        <TextBox Grid.Row="1"
                  AcceptsReturn="True"
                  IsReadOnly="True"
                  Text="{Binding Text, Mode=OneWay}"
                  TextWrapping="Wrap"
                  VerticalScrollBarVisibility="Auto" />
 
-        <DockPanel Grid.Row="1" Margin="0,8,0,0">
+        <!-- Raw transcript, collapsed by default, for debugging the enhancement -->
+        <Expander Grid.Row="2"
+                  Margin="0,8,0,0"
+                  Header="Raw transcript"
+                  IsExpanded="False">
+            <TextBox MaxHeight="110"
+                     Margin="0,4,0,0"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     Text="{Binding RawTranscript, Mode=OneWay}"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" />
+        </Expander>
+
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Width="88"
                         Margin="0,0,8,0"

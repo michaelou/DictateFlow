@@ -37,19 +37,27 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 
     private readonly HttpClient _httpClient;
     private readonly ISettingsService _settingsService;
+    private readonly IUsageSink _usageSink;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<AzureFoundryTranscriptionProvider> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="AzureFoundryTranscriptionProvider"/> class.</summary>
     /// <param name="httpClient">Client supplied by <c>IHttpClientFactory</c>, wrapped in the standard resilience pipeline.</param>
     /// <param name="settingsService">Supplies the speech endpoint, key, deployment, language and timeout.</param>
+    /// <param name="usageSink">Receives the audio duration after each successful call.</param>
+    /// <param name="timeProvider">Timestamps usage records (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public AzureFoundryTranscriptionProvider(
         HttpClient httpClient,
         ISettingsService settingsService,
+        IUsageSink usageSink,
+        TimeProvider timeProvider,
         ILogger<AzureFoundryTranscriptionProvider> logger)
     {
         _httpClient = httpClient;
         _settingsService = settingsService;
+        _usageSink = usageSink;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -239,6 +247,13 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
             ?? Math.Max(0, audioByteCount - WavHeaderBytes) / (double)BytesPerSecond;
         var language = response.Language
             ?? (string.IsNullOrWhiteSpace(configuredLanguage) ? null : configuredLanguage);
+
+        _usageSink.Record(new UsageRecord(
+            _timeProvider.GetUtcNow().UtcDateTime,
+            UsageCategories.Transcription,
+            duration,
+            PromptTokens: null,
+            CompletionTokens: null));
 
         _logger.LogDebug("Transcript received: {CharCount} characters, {DurationSeconds:F1} s of audio", response.Text.Length, duration);
         return new TranscriptionResult(response.Text, duration, language);

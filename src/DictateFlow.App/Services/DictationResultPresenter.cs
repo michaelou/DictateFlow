@@ -11,9 +11,10 @@ namespace DictateFlow.App.Services;
 
 /// <summary>
 /// Default <see cref="IDictationResultPresenter"/> implementation. Listens to
-/// <see cref="IDictationController"/> transcription events, shows the (single, reused)
-/// <see cref="TranscriptWindow"/> for results, and raises a tray notification with the
-/// actionable message when a provider fails.
+/// <see cref="IDictationController"/> dictation events, shows the (single, reused)
+/// <see cref="TranscriptWindow"/> for results (enhanced text, with the raw transcript in a
+/// collapsed expander and a warning banner when enhancement fell back), and raises a tray
+/// notification with the actionable message when transcription fails.
 /// </summary>
 public sealed class DictationResultPresenter : IDictationResultPresenter
 {
@@ -39,16 +40,16 @@ public sealed class DictationResultPresenter : IDictationResultPresenter
         _viewModel = viewModel;
         _logger = logger;
 
-        _controller.TranscriptionCompleted += OnTranscriptionCompleted;
-        _controller.TranscriptionFailed += OnTranscriptionFailed;
+        _controller.DictationCompleted += OnDictationCompleted;
+        _controller.DictationFailed += OnDictationFailed;
         _viewModel.CloseRequested += OnCloseRequested;
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        _controller.TranscriptionCompleted -= OnTranscriptionCompleted;
-        _controller.TranscriptionFailed -= OnTranscriptionFailed;
+        _controller.DictationCompleted -= OnDictationCompleted;
+        _controller.DictationFailed -= OnDictationFailed;
         _viewModel.CloseRequested -= OnCloseRequested;
 
         OnUiThread(() =>
@@ -58,9 +59,11 @@ public sealed class DictationResultPresenter : IDictationResultPresenter
         });
     }
 
-    private void OnTranscriptionCompleted(object? sender, TranscriptionResult result) => OnUiThread(() =>
+    private void OnDictationCompleted(object? sender, DictationResult result) => OnUiThread(() =>
     {
         _viewModel.Text = result.Text;
+        _viewModel.RawTranscript = result.RawTranscript;
+        _viewModel.Warning = result.EnhancementWarning;
         _viewModel.StatusMessage = null;
 
         if (_window is null)
@@ -73,11 +76,11 @@ public sealed class DictationResultPresenter : IDictationResultPresenter
         _window.Activate();
     });
 
-    private void OnTranscriptionFailed(object? sender, ProviderException error)
+    private void OnDictationFailed(object? sender, ProviderException error)
     {
-        _logger.LogDebug("Presenting transcription failure from {ProviderName}", error.ProviderName);
+        _logger.LogDebug("Presenting dictation failure from {ProviderName}", error.ProviderName);
         var title = error.IsConfigurationError
-            ? "DictateFlow — check your speech settings"
+            ? "DictateFlow — check your settings"
             : "DictateFlow — transcription failed";
         _trayIconService.ShowErrorNotification(title, error.Message);
     }

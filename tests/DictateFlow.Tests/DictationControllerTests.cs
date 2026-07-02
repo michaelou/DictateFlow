@@ -1,8 +1,11 @@
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace DictateFlow.Tests;
@@ -14,6 +17,9 @@ public sealed class DictationControllerTests
     private readonly Mock<IHotkeyService> _hotkeys = new();
     private readonly Mock<IRecordingOverlay> _overlay = new();
     private readonly Mock<ITranscriptionProvider> _transcription = new();
+    private readonly Mock<IPromptResolver> _resolver = new();
+    private readonly Mock<ILLMProvider> _llm = new();
+    private readonly Mock<IForegroundAppService> _foregroundApp = new();
     private readonly Mock<ISettingsService> _settings = new();
     private readonly TestTimeProvider _time = new();
     private readonly AppSettings _appSettings = new();
@@ -26,10 +32,15 @@ public sealed class DictationControllerTests
         _recorder.Setup(r => r.StopAsync()).ReturnsAsync(() => new MemoryStream(new byte[44]));
         _transcription.Setup(t => t.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TranscriptionResult("transcribed text", 1.0, "en-US"));
+        _resolver.Setup(r => r.Resolve(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns<string, string>((transcript, mode) => new PromptContext("system prompt", transcript, 0.2, 2000, mode));
+        _llm.Setup(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PromptContext context, CancellationToken _) => "[enhanced] " + context.Transcript);
     }
 
     private DictationController CreateController()
-        => new(_recorder.Object, _hotkeys.Object, _overlay.Object, _transcription.Object, _settings.Object,
+        => new(_recorder.Object, _hotkeys.Object, _overlay.Object, _transcription.Object,
+            _resolver.Object, _llm.Object, _foregroundApp.Object, _settings.Object,
             _time, Mock.Of<ILogger<DictationController>>());
 
     /// <summary>Makes the recorder return a capture that contains audio beyond the WAV header.</summary>
@@ -46,6 +57,16 @@ public sealed class DictationControllerTests
         Assert.True(controller.IsRecording);
         _recorder.Verify(r => r.StartAsync(It.IsAny<CancellationToken>()), Times.Once);
         _overlay.Verify(o => o.ShowListening(), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartRecordingAsync_CapturesForegroundApplication()
+    {
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+
+        _foregroundApp.Verify(f => f.Capture(), Times.Once);
     }
 
     [Fact]
@@ -228,22 +249,70 @@ public sealed class DictationControllerTests
     }
 
     [Fact]
-    public async Task StopRecordingAsync_WithAudio_TranscribesAndRaisesCompleted()
+    public async Task StopRecordingAsync_WithAudio_TranscribesEnhancesAndRaisesCompleted()
     {
         SetupCaptureWithAudio();
+        _appSettings.ActivePromptMode = "Email";
         var controller = CreateController();
-        TranscriptionResult? completed = null;
-        controller.TranscriptionCompleted += (_, result) => completed = result;
+        DictationResult? completed = null;
+        controller.DictationCompleted += (_, result) => completed = result;
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.NotNull(completed);
+        Assert.Equal("[enhanced] transcribed text", completed!.Text);
+        Assert.Equal("transcribed text", completed.RawTranscript);
+        Assert.Equal("Email", completed.ModeName);
+        Assert.Null(completed.EnhancementWarning);
+        _transcription.Verify(t => t.TranscribeAsync(controller.LastCapture!, CancellationToken.None), Times.Once);
+        _resolver.Verify(r => r.Resolve("transcribed text", "Email"), Times.Once);
+        _overlay.Verify(o => o.ShowProcessing(), Times.Once);
+        _overlay.Verify(o => o.Hide(), Times.Once);
+        _overlay.Verify(o => o.ShowError(), Times.Never);
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_LlmFails_FallsBackToRawTranscriptWithWarning()
+    {
+        SetupCaptureWithAudio();
+        _llm.Setup(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("AzureFoundryLLM", "model overloaded"));
+        var controller = CreateController();
+        DictationResult? completed = null;
+        ProviderException? failed = null;
+        controller.DictationCompleted += (_, result) => completed = result;
+        controller.DictationFailed += (_, ex) => failed = ex;
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.Null(failed); // an enhancement failure must not lose the dictation
+        Assert.NotNull(completed);
+        Assert.Equal("transcribed text", completed!.Text);
+        Assert.Equal("transcribed text", completed.RawTranscript);
+        Assert.NotNull(completed.EnhancementWarning);
+        Assert.Contains("model overloaded", completed.EnhancementWarning);
+        _overlay.Verify(o => o.ShowError(), Times.Never);
+        _overlay.Verify(o => o.Hide(), Times.Once);
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_ResolverThrows_FallsBackToRawTranscriptWithWarning()
+    {
+        SetupCaptureWithAudio();
+        _resolver.Setup(r => r.Resolve(It.IsAny<string>(), It.IsAny<string>()))
+            .Throws(new InvalidOperationException("boom"));
+        var controller = CreateController();
+        DictationResult? completed = null;
+        controller.DictationCompleted += (_, result) => completed = result;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync();
 
         Assert.NotNull(completed);
         Assert.Equal("transcribed text", completed!.Text);
-        _transcription.Verify(t => t.TranscribeAsync(controller.LastCapture!, CancellationToken.None), Times.Once);
-        _overlay.Verify(o => o.ShowProcessing(), Times.Once);
-        _overlay.Verify(o => o.Hide(), Times.Once);
-        _overlay.Verify(o => o.ShowError(), Times.Never);
+        Assert.NotNull(completed.EnhancementWarning);
     }
 
     [Fact]
@@ -271,7 +340,7 @@ public sealed class DictationControllerTests
             .ThrowsAsync(failure);
         var controller = CreateController();
         ProviderException? raised = null;
-        controller.TranscriptionFailed += (_, ex) => raised = ex;
+        controller.DictationFailed += (_, ex) => raised = ex;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync(); // must not throw — the app keeps running
@@ -279,6 +348,7 @@ public sealed class DictationControllerTests
         Assert.Same(failure, raised);
         Assert.False(controller.IsRecording);
         _overlay.Verify(o => o.ShowError(), Times.Once);
+        _llm.Verify(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -289,7 +359,7 @@ public sealed class DictationControllerTests
             .ThrowsAsync(new InvalidOperationException("boom"));
         var controller = CreateController();
         ProviderException? raised = null;
-        controller.TranscriptionFailed += (_, ex) => raised = ex;
+        controller.DictationFailed += (_, ex) => raised = ex;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync();
@@ -299,22 +369,38 @@ public sealed class DictationControllerTests
         _overlay.Verify(o => o.ShowError(), Times.Once);
     }
 
+    /// <summary>
+    /// The M4 end-to-end pipeline test: mock speech + real resolver (with a real store seeded
+    /// into a temp dir) + mock LLM — a full dictation produces enhanced text with no network.
+    /// </summary>
     [Fact]
-    public async Task StopRecordingAsync_WithMockProvider_ReturnsCannedText()
+    public async Task StopRecordingAsync_MockSpeechAndMockLlm_EndToEndProducesEnhancedText()
     {
+        using var paths = new TestAppPaths();
         SetupCaptureWithAudio();
-        var mock = new MockTranscriptionProvider { CannedText = "canned", Delay = TimeSpan.Zero };
+        _appSettings.ActivePromptMode = "Raw";
+
+        var speech = new MockTranscriptionProvider { CannedText = "hello world", Delay = TimeSpan.Zero };
+        var store = new PromptModeStore(paths, NullLogger<PromptModeStore>.Instance);
+        var resolver = new PromptResolver(
+            store, _settings.Object, _foregroundApp.Object, TimeProvider.System, NullLogger<PromptResolver>.Instance);
+        var llm = new MockLLMProvider { Delay = TimeSpan.Zero };
+
         var controller = new DictationController(
-            _recorder.Object, _hotkeys.Object, _overlay.Object, mock, _settings.Object,
+            _recorder.Object, _hotkeys.Object, _overlay.Object, speech,
+            resolver, llm, _foregroundApp.Object, _settings.Object,
             _time, Mock.Of<ILogger<DictationController>>());
-        TranscriptionResult? completed = null;
-        controller.TranscriptionCompleted += (_, result) => completed = result;
+        DictationResult? completed = null;
+        controller.DictationCompleted += (_, result) => completed = result;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync();
 
-        Assert.Equal("canned", completed?.Text);
-        Assert.Equal(1.0, completed?.AudioDurationSeconds); // 32,000 audio bytes → 1 s
+        Assert.NotNull(completed);
+        Assert.Equal("[enhanced] hello world", completed!.Text);
+        Assert.Equal("hello world", completed.RawTranscript);
+        Assert.Equal("Raw", completed.ModeName);
+        Assert.Null(completed.EnhancementWarning);
     }
 
     [Fact]
