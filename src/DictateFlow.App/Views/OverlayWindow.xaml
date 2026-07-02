@@ -1,0 +1,35 @@
+<Window x:Class="DictateFlow.App.Views.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DictateFlow Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False">
+    <Border Padding="14,9"
+            Background="#DD202020"
+            CornerRadius="10"
+            IsHitTestVisible="False">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock FontSize="14"
+                       Foreground="White"
+                       Text="🎤 Listening…"
+                       VerticalAlignment="Center" />
+            <ProgressBar Width="90"
+                         Height="6"
+                         Margin="12,0,0,0"
+                         Minimum="0"
+                         Maximum="1"
+                         Value="{Binding Level, Mode=OneWay}"
+                         BorderThickness="0"
+                         Background="#33FFFFFF"
+                         Foreground="#FF4CC38A"
+                         VerticalAlignment="Center" />
+        </StackPanel>
+    </Border>
+</Window>

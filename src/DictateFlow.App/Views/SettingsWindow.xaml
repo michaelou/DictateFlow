@@ -28,15 +28,88 @@
                 BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
                 BorderThickness="1"
                 Padding="16">
-            <StackPanel>
-                <TextBlock FontSize="18"
-                           FontWeight="SemiBold"
-                           Text="{Binding SelectedSection}" />
-                <TextBlock Margin="0,8,0,0"
-                           Foreground="{x:Static SystemColors.GrayTextBrush}"
-                           TextWrapping="Wrap"
-                           Text="Settings for this section will be added in a later milestone." />
-            </StackPanel>
+            <Grid>
+                <!-- General / Recording page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="General">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Recording" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Mode" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Content="Push-to-talk (hold the hotkey)"
+                                     GroupName="RecordingMode"
+                                     IsChecked="{Binding IsPushToTalk}" />
+                        <RadioButton Margin="16,0,0,0"
+                                     Content="Toggle (press to start/stop)"
+                                     GroupName="RecordingMode"
+                                     IsChecked="{Binding IsToggle}" />
+                    </StackPanel>
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Hotkey" />
+                    <TextBox x:Name="HotkeyBox"
+                             Width="200"
+                             HorizontalAlignment="Left"
+                             IsReadOnly="True"
+                             IsReadOnlyCaretVisible="False"
+                             Text="{Binding Hotkey, Mode=OneWay}"
+                             PreviewKeyDown="OnHotkeyBoxPreviewKeyDown" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Click the box and press the desired key combination." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Microphone" />
+                    <ComboBox Width="280"
+                              HorizontalAlignment="Left"
+                              DisplayMemberPath="DisplayName"
+                              ItemsSource="{Binding Microphones}"
+                              SelectedItem="{Binding SelectedMicrophone}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Silence timeout (seconds)" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding SilenceTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Placeholder for sections that arrive in later milestones -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="General">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="{Binding SelectedSection}" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               TextWrapping="Wrap"
+                               Text="Settings for this section will be added in a later milestone." />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <StackPanel Grid.Row="1"

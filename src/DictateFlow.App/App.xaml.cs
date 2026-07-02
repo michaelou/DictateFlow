@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Audio;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,6 +46,10 @@ public partial class App : Application
 
             _logger = _host.Services.GetRequiredService<ILogger<App>>();
             _logger.LogInformation("Host built and started; app data at {Root}", appPaths.RootDirectory);
+
+            // Materialize the dictation controller before settings load: its SettingsChanged
+            // subscription arms the global hotkey from the loaded settings.
+            _host.Services.GetRequiredService<IDictationController>();
 
             await _host.Services.GetRequiredService<ISettingsService>().LoadAsync();
 

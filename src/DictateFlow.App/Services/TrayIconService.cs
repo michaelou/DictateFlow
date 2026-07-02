@@ -47,14 +47,21 @@ public sealed class TrayIconService : ITrayIconService
 
     /// <inheritdoc />
     public void ShowErrorNotification(string title, string message)
+        => ShowNotificationSafe(title, message, NotificationIcon.Error);
+
+    /// <inheritdoc />
+    public void ShowWarningNotification(string title, string message)
+        => ShowNotificationSafe(title, message, NotificationIcon.Warning);
+
+    private void ShowNotificationSafe(string title, string message, NotificationIcon icon)
     {
         try
         {
-            _trayIcon?.ShowNotification(title, message, NotificationIcon.Error);
+            _trayIcon?.ShowNotification(title, message, icon);
         }
         catch (Exception ex)
         {
-            // Never let an error notification take the app down.
+            // Never let a notification take the app down.
             _logger.LogWarning(ex, "Failed to show tray notification");
         }
     }

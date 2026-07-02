@@ -1,6 +1,8 @@
 using DictateFlow.App.Services;
+using DictateFlow.App.Services.Audio;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Audio;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DictateFlow.App;
@@ -37,7 +39,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IShutdownService, ShutdownService>();
         services.AddSingleton<ITrayIconService, TrayIconService>();
 
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IAudioRecorder, NAudioRecorder>();
+        services.AddSingleton<IMicrophoneEnumerator, MicrophoneEnumerator>();
+        services.AddSingleton<IHotkeyService, HotkeyService>();
+        services.AddSingleton<IRecordingOverlay, RecordingOverlayService>();
+        services.AddSingleton<IDictationController, DictationController>();
+
         services.AddSingleton<TrayViewModel>();
+        services.AddSingleton<OverlayViewModel>();
         services.AddTransient<SettingsViewModel>();
 
         return services;
