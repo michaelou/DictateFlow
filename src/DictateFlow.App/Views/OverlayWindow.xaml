@@ -27,8 +27,11 @@
                             <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}">
                                 <Setter Property="Text" Value="🧠 Processing…" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Success}">
+                                <Setter Property="Text" Value="✓ Pasted" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Error}">
-                                <Setter Property="Text" Value="⚠️ Transcription failed" />
+                                <Setter Property="Text" Value="⚠️ Dictation failed" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>

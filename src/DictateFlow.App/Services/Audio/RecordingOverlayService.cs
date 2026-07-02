@@ -38,6 +38,9 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     public void ShowProcessing() => OnUiThread(() => ShowState(OverlayState.Processing));
 
     /// <inheritdoc />
+    public void ShowSuccess() => OnUiThread(() => ShowState(OverlayState.Success));
+
+    /// <inheritdoc />
     public void ShowError() => OnUiThread(() => ShowState(OverlayState.Error));
 
     /// <inheritdoc />

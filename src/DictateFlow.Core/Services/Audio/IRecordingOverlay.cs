@@ -16,6 +16,9 @@ public interface IRecordingOverlay
     /// <summary>Shows the overlay in the Processing state (captured audio is being transcribed).</summary>
     void ShowProcessing();
 
+    /// <summary>Shows the overlay in the Success state (the dictated text was delivered).</summary>
+    void ShowSuccess();
+
     /// <summary>Shows the overlay in the Error state (the dictation pipeline failed).</summary>
     void ShowError();
 

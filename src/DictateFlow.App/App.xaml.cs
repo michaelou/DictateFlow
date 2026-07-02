@@ -49,10 +49,10 @@ public partial class App : Application
             _logger.LogInformation("Host built and started; app data at {Root}", appPaths.RootDirectory);
 
             // Materialize the dictation controller before settings load: its SettingsChanged
-            // subscription arms the global hotkey from the loaded settings. The result
-            // presenter subscribes to the controller's transcription events the same way.
+            // subscription arms the global hotkey from the loaded settings. The failure
+            // notifier subscribes to the controller's events the same way.
             _host.Services.GetRequiredService<IDictationController>();
-            _host.Services.GetRequiredService<IDictationResultPresenter>();
+            _host.Services.GetRequiredService<IDictationFailureNotifier>();
 
             await _host.Services.GetRequiredService<ISettingsService>().LoadAsync();
 

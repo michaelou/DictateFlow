@@ -1,7 +1,5 @@
 using DictateFlow.Core.Models;
-using DictateFlow.Core.Services.Llm;
-using DictateFlow.Core.Services.Prompts;
-using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Pipeline;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Core.Services.Audio;
@@ -9,9 +7,9 @@ namespace DictateFlow.Core.Services.Audio;
 /// <summary>
 /// Default <see cref="IDictationController"/> implementation. Subscribes to hotkey and
 /// settings events, drives the recorder and overlay, auto-stops after
-/// <see cref="RecordingSettings.SilenceTimeoutSeconds"/> of silence, transcribes each
-/// completed capture through <see cref="ITranscriptionProvider"/> and enhances the
-/// transcript through <see cref="IPromptResolver"/> + <see cref="ILLMProvider"/>.
+/// <see cref="RecordingSettings.SilenceTimeoutSeconds"/> of silence, and hands each
+/// completed capture (plus the target-application context captured at record-start) to
+/// <see cref="IDictationPipeline"/>.
 /// </summary>
 /// <remarks>
 /// The silence timeout is evaluated on <see cref="IAudioRecorder.LevelChanged"/> events,
@@ -28,15 +26,16 @@ public sealed class DictationController : IDictationController, IDisposable
     /// <summary>Size of the WAV header; captures at or below this size contain no audio.</summary>
     private const int WavHeaderBytes = 44;
 
+    /// <summary>How long the Success overlay state stays visible before auto-hiding.</summary>
+    private static readonly TimeSpan SuccessOverlayDuration = TimeSpan.FromSeconds(1.5);
+
     /// <summary>How long the Error overlay state stays visible before auto-hiding.</summary>
-    private static readonly TimeSpan ErrorOverlayDuration = TimeSpan.FromSeconds(2.5);
+    private static readonly TimeSpan ErrorOverlayDuration = TimeSpan.FromSeconds(3);
 
     private readonly IAudioRecorder _recorder;
     private readonly IHotkeyService _hotkeyService;
     private readonly IRecordingOverlay _overlay;
-    private readonly ITranscriptionProvider _transcriptionProvider;
-    private readonly IPromptResolver _promptResolver;
-    private readonly ILLMProvider _llmProvider;
+    private readonly IDictationPipeline _pipeline;
     private readonly IForegroundAppService _foregroundAppService;
     private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
@@ -50,20 +49,16 @@ public sealed class DictationController : IDictationController, IDisposable
     /// <param name="recorder">Captures microphone audio.</param>
     /// <param name="hotkeyService">Raises global hotkey events; re-armed when settings change.</param>
     /// <param name="overlay">The on-screen recording indicator.</param>
-    /// <param name="transcriptionProvider">Converts completed captures into text.</param>
-    /// <param name="promptResolver">Builds the LLM prompt context for each transcript.</param>
-    /// <param name="llmProvider">Enhances each transcript.</param>
+    /// <param name="pipeline">Runs each completed capture through transcription, enhancement, history and output.</param>
     /// <param name="foregroundAppService">Captures the target application at record-start.</param>
-    /// <param name="settingsService">Supplies recording mode, hotkey, silence timeout and active prompt mode.</param>
+    /// <param name="settingsService">Supplies recording mode, hotkey and silence timeout.</param>
     /// <param name="timeProvider">Measures silence duration (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public DictationController(
         IAudioRecorder recorder,
         IHotkeyService hotkeyService,
         IRecordingOverlay overlay,
-        ITranscriptionProvider transcriptionProvider,
-        IPromptResolver promptResolver,
-        ILLMProvider llmProvider,
+        IDictationPipeline pipeline,
         IForegroundAppService foregroundAppService,
         ISettingsService settingsService,
         TimeProvider timeProvider,
@@ -72,9 +67,7 @@ public sealed class DictationController : IDictationController, IDisposable
         _recorder = recorder;
         _hotkeyService = hotkeyService;
         _overlay = overlay;
-        _transcriptionProvider = transcriptionProvider;
-        _promptResolver = promptResolver;
-        _llmProvider = llmProvider;
+        _pipeline = pipeline;
         _foregroundAppService = foregroundAppService;
         _settingsService = settingsService;
         _timeProvider = timeProvider;
@@ -102,10 +95,7 @@ public sealed class DictationController : IDictationController, IDisposable
     public Stream? LastCapture { get; private set; }
 
     /// <inheritdoc />
-    public event EventHandler<DictationResult>? DictationCompleted;
-
-    /// <inheritdoc />
-    public event EventHandler<ProviderException>? DictationFailed;
+    public event EventHandler<string>? DictationFailed;
 
     /// <inheritdoc />
     public async Task StartRecordingAsync()
@@ -122,8 +112,8 @@ public sealed class DictationController : IDictationController, IDisposable
             _lastLoudTimestamp = _timeProvider.GetTimestamp();
         }
 
-        // Capture the target app before any DictateFlow UI can steal the foreground;
-        // the resolver substitutes it into {{ApplicationName}} later.
+        // Capture the target app before any DictateFlow UI can steal the foreground; the
+        // pipeline uses the name for {{ApplicationName}} and the handle to re-focus for output.
         _foregroundAppService.Capture();
 
         try
@@ -180,7 +170,7 @@ public sealed class DictationController : IDictationController, IDisposable
 
         if (capture.Length <= WavHeaderBytes)
         {
-            _logger.LogDebug("Capture contains no audio; skipping transcription");
+            _logger.LogDebug("Capture contains no audio; skipping the pipeline");
             _overlay.Hide();
             return;
         }
@@ -189,74 +179,56 @@ public sealed class DictationController : IDictationController, IDisposable
     }
 
     /// <summary>
-    /// Runs a completed capture through the pipeline: transcribe, then enhance. The overlay
-    /// stays in Processing through both stages. Raises <see cref="DictationCompleted"/> with
-    /// the enhanced text (or the raw transcript plus a warning when enhancement failed); a
-    /// transcription failure raises <see cref="DictationFailed"/> and briefly shows the
-    /// Error overlay.
+    /// Runs a completed capture through the dictation pipeline. The overlay stays in
+    /// Processing until the pipeline returns, then shows Success (auto-hidden), hides on a
+    /// user cancel, or shows Error (auto-hidden) and raises <see cref="DictationFailed"/>.
     /// </summary>
     private async Task ProcessCaptureAsync(Stream capture)
     {
         _overlay.ShowProcessing();
 
-        TranscriptionResult transcription;
+        var request = new PipelineRequest(
+            capture,
+            _foregroundAppService.LastCaptured,
+            _foregroundAppService.LastCapturedWindowHandle);
+
+        PipelineResult result;
         try
         {
-            capture.Position = 0;
-            transcription = await _transcriptionProvider.TranscribeAsync(capture, CancellationToken.None).ConfigureAwait(false);
-            _logger.LogInformation(
-                "Transcription completed: {CharCount} characters from ~{DurationSeconds:F1} s of audio",
-                transcription.Text.Length, transcription.AudioDurationSeconds);
+            result = await _pipeline.RunAsync(request, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            var failure = ex as ProviderException
-                ?? new ProviderException("Transcription", $"Transcription failed unexpectedly: {ex.Message}", ex);
-            _logger.LogError(ex, "Transcription failed ({ProviderName})", failure.ProviderName);
+            // The pipeline contract is to never throw; guard anyway so the app stays alive.
+            _logger.LogError(ex, "Dictation pipeline threw unexpectedly");
+            result = new PipelineResult(false, null, null, $"Dictation failed unexpectedly: {ex.Message}");
+        }
 
+        if (!result.Success)
+        {
+            var message = result.ErrorMessage ?? "Dictation failed.";
+            _logger.LogWarning("Dictation failed: {Message}", message);
             _overlay.ShowError();
-            DictationFailed?.Invoke(this, failure);
-            RunGuarded(HideErrorOverlayAfterDelayAsync);
+            DictationFailed?.Invoke(this, message);
+            RunGuarded(() => HideOverlayAfterDelayAsync(ErrorOverlayDuration));
             return;
         }
 
-        var result = await EnhanceAsync(transcription.Text).ConfigureAwait(false);
-        _overlay.Hide();
-        DictationCompleted?.Invoke(this, result);
+        if (result.FinalText is null)
+        {
+            // The user cancelled in the preview dialog — not an error.
+            _overlay.Hide();
+            return;
+        }
+
+        _overlay.ShowSuccess();
+        RunGuarded(() => HideOverlayAfterDelayAsync(SuccessOverlayDuration));
     }
 
-    /// <summary>
-    /// Enhances a transcript through the active prompt mode. Never throws: an enhancement
-    /// failure degrades to the raw transcript with a user-presentable warning, so the
-    /// dictation is not lost.
-    /// </summary>
-    private async Task<DictationResult> EnhanceAsync(string transcript)
+    /// <summary>Hides the overlay after <paramref name="delay"/>, unless a new recording started.</summary>
+    private async Task HideOverlayAfterDelayAsync(TimeSpan delay)
     {
-        var modeName = _settingsService.Current.ActivePromptMode;
-        try
-        {
-            var context = _promptResolver.Resolve(transcript, modeName);
-            var enhanced = await _llmProvider.ProcessAsync(context, CancellationToken.None).ConfigureAwait(false);
-            _logger.LogInformation(
-                "Enhancement completed with mode '{ModeName}': {CharCount} characters",
-                context.ModeName, enhanced.Length);
-            return new DictationResult(enhanced, transcript, context.ModeName, EnhancementWarning: null);
-        }
-        catch (Exception ex)
-        {
-            var failure = ex as ProviderException
-                ?? new ProviderException("LLM", $"Enhancement failed unexpectedly: {ex.Message}", ex);
-            _logger.LogError(ex, "Enhancement failed ({ProviderName}); falling back to the raw transcript", failure.ProviderName);
-            return new DictationResult(
-                transcript, transcript, modeName,
-                $"AI enhancement failed — showing the raw transcript. {failure.Message}");
-        }
-    }
-
-    /// <summary>Hides the Error overlay after a short delay, unless a new recording started.</summary>
-    private async Task HideErrorOverlayAfterDelayAsync()
-    {
-        await Task.Delay(ErrorOverlayDuration).ConfigureAwait(false);
+        await Task.Delay(delay).ConfigureAwait(false);
 
         lock (_gate)
         {

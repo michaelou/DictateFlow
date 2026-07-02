@@ -1,9 +1,13 @@
 using DictateFlow.App.Services;
 using DictateFlow.App.Services.Audio;
+using DictateFlow.App.Services.Output;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Output;
+using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Providers.AzureFoundry;
@@ -76,11 +80,22 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<MockLLMProvider>,
             sp.GetRequiredService<ILogger<LLMProviderSelector>>()));
 
-        services.AddSingleton<IDictationResultPresenter, DictationResultPresenter>();
+        // Output pipeline (M5): history write, both output providers (the pipeline picks per
+        // call from settings), the mode-aware confirmation gate, and the orchestrator itself.
+        services.AddSingleton<IHistoryRepository, SqliteHistoryRepository>();
+        services.AddSingleton<IOutputProvider, ClipboardPasteOutputProvider>();
+        services.AddSingleton<IOutputProvider, SimulatedKeyboardOutputProvider>();
+        services.AddSingleton<IOutputGate>(sp => new OutputGate(
+            sp.GetRequiredService<ISettingsService>(),
+            sp.GetRequiredService<IForegroundAppService>(),
+            sp.GetRequiredService<ITrayIconService>,
+            sp.GetRequiredService<ILogger<OutputGate>>()));
+        services.AddSingleton<IDictationPipeline, DictationPipeline>();
+
+        services.AddSingleton<IDictationFailureNotifier, DictationFailureNotifier>();
 
         services.AddSingleton<TrayViewModel>();
         services.AddSingleton<OverlayViewModel>();
-        services.AddSingleton<TranscriptViewModel>();
         services.AddTransient<SettingsViewModel>();
 
         return services;

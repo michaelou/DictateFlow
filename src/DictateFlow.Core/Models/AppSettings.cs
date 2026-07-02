@@ -92,11 +92,11 @@ public sealed class LlmSettings
 /// <summary>Output (text delivery) pipeline settings.</summary>
 public sealed class OutputSettings
 {
-    /// <summary>Gets or sets the output provider name (e.g. <c>ClipboardPaste</c>).</summary>
-    public string Provider { get; set; } = "ClipboardPaste";
+    /// <summary>Gets or sets the output provider name; see <see cref="OutputProviderNames"/>.</summary>
+    public string Provider { get; set; } = OutputProviderNames.ClipboardPaste;
 
-    /// <summary>Gets or sets the delivery mode (e.g. <c>Automatic</c> or <c>Manual</c>).</summary>
-    public string Mode { get; set; } = "Automatic";
+    /// <summary>Gets or sets the delivery mode; see <see cref="OutputModes"/>.</summary>
+    public string Mode { get; set; } = OutputModes.Automatic;
 }
 
 /// <summary>Dictation history settings.</summary>

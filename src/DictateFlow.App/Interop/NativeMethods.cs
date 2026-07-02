@@ -2,10 +2,23 @@ using System.Runtime.InteropServices;
 
 namespace DictateFlow.App.Interop;
 
-/// <summary>Win32 P/Invoke declarations for global hotkeys, keyboard hooks and window styles.</summary>
+/// <summary>Win32 P/Invoke declarations for global hotkeys, keyboard hooks, window styles and input injection.</summary>
 internal static class NativeMethods
 {
     public const int WmHotkey = 0x0312;
+
+    /// <summary><c>INPUT.type</c> value for keyboard events.</summary>
+    public const uint InputKeyboard = 1;
+
+    /// <summary><c>KEYBDINPUT.dwFlags</c>: the event is a key release.</summary>
+    public const uint KeyEventFKeyUp = 0x0002;
+
+    /// <summary><c>KEYBDINPUT.dwFlags</c>: <c>wScan</c> carries a UTF-16 code unit instead of a scan code.</summary>
+    public const uint KeyEventFUnicode = 0x0004;
+
+    public const ushort VkControl = 0x11;
+    public const ushort VkV = 0x56;
+    public const ushort VkReturn = 0x0D;
 
     public const int WhKeyboardLl = 13;
     public const int WmKeyDown = 0x0100;
@@ -66,4 +79,53 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    /// <summary>Managed mirror of <c>KEYBDINPUT</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KeybdInput
+    {
+        public ushort Vk;
+        public ushort Scan;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
+    /// <summary>Managed mirror of <c>MOUSEINPUT</c>; declared only to give <see cref="InputUnion"/> its native size.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MouseInput
+    {
+        public int Dx;
+        public int Dy;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
+    /// <summary>Managed mirror of the anonymous union inside <c>INPUT</c>.</summary>
+    [StructLayout(LayoutKind.Explicit)]
+    public struct InputUnion
+    {
+        [FieldOffset(0)]
+        public MouseInput Mouse;
+
+        [FieldOffset(0)]
+        public KeybdInput Keyboard;
+    }
+
+    /// <summary>Managed mirror of <c>INPUT</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Input
+    {
+        public uint Type;
+        public InputUnion Union;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, Input[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 }
