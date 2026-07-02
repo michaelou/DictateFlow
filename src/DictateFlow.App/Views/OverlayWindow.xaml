@@ -1,6 +1,7 @@
 <Window x:Class="DictateFlow.App.Views.OverlayWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:DictateFlow.Core.Models;assembly=DictateFlow.Core"
         Title="DictateFlow Overlay"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -18,8 +19,21 @@
         <StackPanel Orientation="Horizontal">
             <TextBlock FontSize="14"
                        Foreground="White"
-                       Text="🎤 Listening…"
-                       VerticalAlignment="Center" />
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Text" Value="🎤 Listening…" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}">
+                                <Setter Property="Text" Value="🧠 Processing…" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Error}">
+                                <Setter Property="Text" Value="⚠️ Transcription failed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <ProgressBar Width="90"
                          Height="6"
                          Margin="12,0,0,0"
@@ -29,7 +43,18 @@
                          BorderThickness="0"
                          Background="#33FFFFFF"
                          Foreground="#FF4CC38A"
-                         VerticalAlignment="Center" />
+                         VerticalAlignment="Center">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Listening}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
         </StackPanel>
     </Border>
 </Window>

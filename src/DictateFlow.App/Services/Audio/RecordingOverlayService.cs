@@ -27,14 +27,18 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     /// <inheritdoc />
     public void ShowListening() => OnUiThread(() =>
     {
-        _window ??= new OverlayWindow { DataContext = _viewModel };
         _viewModel.Level = 0f;
-        _viewModel.State = OverlayState.Listening;
-        _window.Show();
+        ShowState(OverlayState.Listening);
     });
 
     /// <inheritdoc />
     public void UpdateLevel(float level) => OnUiThread(() => _viewModel.Level = level);
+
+    /// <inheritdoc />
+    public void ShowProcessing() => OnUiThread(() => ShowState(OverlayState.Processing));
+
+    /// <inheritdoc />
+    public void ShowError() => OnUiThread(() => ShowState(OverlayState.Error));
 
     /// <inheritdoc />
     public void Hide() => OnUiThread(() =>
@@ -49,6 +53,14 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
         _window?.Close();
         _window = null;
     });
+
+    /// <summary>Puts the overlay window into <paramref name="state"/>, creating it on first use.</summary>
+    private void ShowState(OverlayState state)
+    {
+        _window ??= new OverlayWindow { DataContext = _viewModel };
+        _viewModel.State = state;
+        _window.Show();
+    }
 
     /// <summary>
     /// Queues <paramref name="action"/> on the UI dispatcher without blocking the caller

@@ -1,6 +1,7 @@
 <Window x:Class="DictateFlow.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DictateFlow.App.Controls"
         Title="DictateFlow Settings"
         Width="640"
         Height="440"
@@ -28,6 +29,7 @@
                 BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
                 BorderThickness="1"
                 Padding="16">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <Grid>
                 <!-- General / Recording page -->
                 <StackPanel>
@@ -88,6 +90,68 @@
                                Text="{Binding ValidationError}" />
                 </StackPanel>
 
+                <!-- Speech (transcription provider) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Speech">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Speech recognition" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Azure AI Foundry transcription. Leave the endpoint empty to use the built-in mock provider." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
+                    <TextBox Width="340"
+                             HorizontalAlignment="Left"
+                             Text="{Binding SpeechEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                    <PasswordBox Width="340"
+                                 HorizontalAlignment="Left"
+                                 controls:PasswordBoxHelper.BoundPassword="{Binding SpeechApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
+                    <TextBox Width="200"
+                             HorizontalAlignment="Left"
+                             Text="{Binding SpeechDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language" />
+                    <TextBox Width="120"
+                             HorizontalAlignment="Left"
+                             Text="{Binding SpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding SpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button Width="140"
+                            Margin="0,16,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Test connection"
+                            Command="{Binding TestConnectionCommand}" />
+                    <TextBlock Margin="0,8,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding SpeechTestResult}" />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
                 <!-- Placeholder for sections that arrive in later milestones -->
                 <StackPanel>
                     <StackPanel.Style>
@@ -95,6 +159,9 @@
                             <Setter Property="Visibility" Value="Visible" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="General">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Speech">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </Style.Triggers>
@@ -110,6 +177,7 @@
                                Text="Settings for this section will be added in a later milestone." />
                 </StackPanel>
             </Grid>
+            </ScrollViewer>
         </Border>
 
         <StackPanel Grid.Row="1"

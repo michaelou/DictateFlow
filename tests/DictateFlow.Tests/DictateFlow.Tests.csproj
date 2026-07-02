@@ -15,14 +15,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The WindowsDesktop SDK removes the System.IO implicit using; restore it. -->
+    <!-- The WindowsDesktop SDK removes the System.IO/System.Net.Http implicit usings; restore them. -->
     <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
     <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DictateFlow.Core\DictateFlow.Core.csproj" />
     <ProjectReference Include="..\..\src\DictateFlow.App\DictateFlow.App.csproj" />
+    <ProjectReference Include="..\..\src\DictateFlow.Providers.AzureFoundry\DictateFlow.Providers.AzureFoundry.csproj" />
   </ItemGroup>
 
 </Project>
