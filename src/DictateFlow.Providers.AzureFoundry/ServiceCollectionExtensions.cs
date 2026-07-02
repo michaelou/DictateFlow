@@ -5,7 +5,7 @@ using Polly;
 namespace DictateFlow.Providers.AzureFoundry;
 
 /// <summary>
-/// DI registration for the Azure AI Foundry transcription provider.
+/// DI registration for the Azure AI Foundry providers.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -27,6 +27,38 @@ public static class ServiceCollectionExtensions
             // The per-call linked CancellationToken is the real timeout; disable the client-level one.
             .AddHttpClient<AzureFoundryTranscriptionProvider>(client => client.Timeout = Timeout.InfiniteTimeSpan);
 
+        return builder.WithStandardResilience(configureResilience);
+    }
+
+    /// <summary>
+    /// Registers <see cref="AzureFoundryLLMProvider"/> as a typed HTTP client with the same
+    /// standard resilience pipeline as the transcription provider: 3 retries with exponential
+    /// backoff on 408/429/5xx and network errors (401/403 are not retried). The user-facing
+    /// timeout (<c>Llm.TimeoutSeconds</c>) is enforced per call inside the provider so
+    /// settings changes apply without a restart.
+    /// </summary>
+    /// <param name="services">The service collection to populate.</param>
+    /// <param name="configureResilience">Optional resilience override, used by tests to shrink retry delays.</param>
+    /// <returns>The typed-client builder, for further customization (e.g. a fake primary handler in tests).</returns>
+    public static IHttpClientBuilder AddAzureFoundryLlm(
+        this IServiceCollection services,
+        Action<HttpStandardResilienceOptions>? configureResilience = null)
+    {
+        var builder = services
+            // The per-call linked CancellationToken is the real timeout; disable the client-level one.
+            .AddHttpClient<AzureFoundryLLMProvider>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+
+        return builder.WithStandardResilience(configureResilience);
+    }
+
+    /// <summary>
+    /// Applies the shared resilience pipeline. The pipeline timeouts are generous static
+    /// ceilings; the user-facing timeouts are enforced per call inside the providers.
+    /// </summary>
+    private static IHttpClientBuilder WithStandardResilience(
+        this IHttpClientBuilder builder,
+        Action<HttpStandardResilienceOptions>? configureResilience)
+    {
         builder.AddStandardResilienceHandler(options =>
         {
             options.Retry.MaxRetryAttempts = 3;

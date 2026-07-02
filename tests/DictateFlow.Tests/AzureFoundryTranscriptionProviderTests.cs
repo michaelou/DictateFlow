@@ -15,6 +15,8 @@ namespace DictateFlow.Tests;
 /// </summary>
 public sealed class AzureFoundryTranscriptionProviderTests
 {
+    private readonly RecordingUsageSink _usageSink = new();
+
     private readonly AppSettings _appSettings = new()
     {
         Speech =
@@ -36,7 +38,8 @@ public sealed class AzureFoundryTranscriptionProviderTests
 
     /// <summary>Creates a provider talking directly to the fake handler (no resilience pipeline).</summary>
     private AzureFoundryTranscriptionProvider CreateProvider(FakeHttpMessageHandler handler)
-        => new(new HttpClient(handler), CreateSettings(), NullLogger<AzureFoundryTranscriptionProvider>.Instance);
+        => new(new HttpClient(handler), CreateSettings(), _usageSink, TimeProvider.System,
+            NullLogger<AzureFoundryTranscriptionProvider>.Instance);
 
     /// <summary>
     /// Creates a provider through the real DI registration, so requests flow through the
@@ -47,6 +50,8 @@ public sealed class AzureFoundryTranscriptionProviderTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(CreateSettings());
+        services.AddSingleton<IUsageSink>(_usageSink);
+        services.AddSingleton(TimeProvider.System);
         services.AddAzureFoundryTranscription(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1))
             .ConfigurePrimaryHttpMessageHandler(() => handler);
         return services.BuildServiceProvider().GetRequiredService<AzureFoundryTranscriptionProvider>();
@@ -144,6 +149,33 @@ public sealed class AzureFoundryTranscriptionProviderTests
         Assert.NotNull(result.AudioDurationSeconds);
         Assert.Equal(1.0, result.AudioDurationSeconds!.Value, precision: 2);
         Assert.Equal("en-US", result.Language); // falls back to the configured language
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_Success_ReportsAudioDurationUsage()
+    {
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"text":"hello","duration":2.5}""");
+        var provider = CreateProvider(handler);
+
+        await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        var record = Assert.Single(_usageSink.Records);
+        Assert.Equal(UsageCategories.Transcription, record.Category);
+        Assert.Equal(2.5, record.DurationSeconds);
+        Assert.Null(record.PromptTokens);
+        Assert.Null(record.CompletionTokens);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_Failure_ReportsNoUsage()
+    {
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.InternalServerError);
+        var provider = CreateProvider(handler);
+
+        await Assert.ThrowsAsync<ProviderException>(
+            () => provider.TranscribeAsync(OneSecondWav(), CancellationToken.None));
+
+        Assert.Empty(_usageSink.Records);
     }
 
     [Fact]

@@ -3,6 +3,8 @@ using DictateFlow.App.Services.Audio;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +61,21 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<AzureFoundryTranscriptionProvider>,
             sp.GetRequiredService<MockTranscriptionProvider>,
             sp.GetRequiredService<ILogger<TranscriptionProviderSelector>>()));
+
+        // LLM enhancement: prompt modes + resolver, the Azure chat-completions provider behind
+        // the same resilience pipeline, the mock fallback, and endpoint-empty selection.
+        services.AddSingleton<IUsageSink, NullUsageSink>();
+        services.AddSingleton<IForegroundAppService, ForegroundAppService>();
+        services.AddSingleton<IPromptModeStore, PromptModeStore>();
+        services.AddSingleton<IPromptResolver, PromptResolver>();
+        services.AddAzureFoundryLlm();
+        services.AddSingleton<MockLLMProvider>();
+        services.AddSingleton<ILLMProvider>(sp => new LLMProviderSelector(
+            sp.GetRequiredService<ISettingsService>(),
+            sp.GetRequiredService<AzureFoundryLLMProvider>,
+            sp.GetRequiredService<MockLLMProvider>,
+            sp.GetRequiredService<ILogger<LLMProviderSelector>>()));
+
         services.AddSingleton<IDictationResultPresenter, DictationResultPresenter>();
 
         services.AddSingleton<TrayViewModel>();

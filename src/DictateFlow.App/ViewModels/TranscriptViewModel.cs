@@ -6,7 +6,9 @@ using Microsoft.Extensions.Logging;
 namespace DictateFlow.App.ViewModels;
 
 /// <summary>
-/// View model backing the transcript window that shows the result of a dictation.
+/// View model backing the transcript window that shows the result of a dictation: the
+/// enhanced text, the raw transcript in a collapsed expander for debugging, and a warning
+/// banner when enhancement failed and the raw transcript is shown instead.
 /// Copying is manual (Copy button) — automatic paste into the target app arrives in M5.
 /// </summary>
 public partial class TranscriptViewModel : ObservableObject
@@ -20,9 +22,17 @@ public partial class TranscriptViewModel : ObservableObject
         _logger = logger;
     }
 
-    /// <summary>Gets or sets the transcript text shown in the window.</summary>
+    /// <summary>Gets or sets the main text shown in the window (enhanced, or raw on LLM failure).</summary>
     [ObservableProperty]
     private string _text = "";
+
+    /// <summary>Gets or sets the raw transcript shown in the collapsed debugging expander.</summary>
+    [ObservableProperty]
+    private string _rawTranscript = "";
+
+    /// <summary>Gets or sets the warning banner text; <see langword="null"/> hides the banner.</summary>
+    [ObservableProperty]
+    private string? _warning;
 
     /// <summary>Gets or sets the status line under the transcript (e.g. copy confirmation).</summary>
     [ObservableProperty]

@@ -2,6 +2,8 @@ using DictateFlow.App;
 using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DictateFlow.Tests;
 
 /// <summary>
-/// Smoke tests proving the DI container can build the M2/M3 object graph
+/// Smoke tests proving the DI container can build the M2/M3/M4 object graph
 /// (no UI resources are touched at construction time).
 /// </summary>
 public sealed class ServiceRegistrationTests : IDisposable
@@ -46,6 +48,23 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<MockTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureFoundryTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<IDictationResultPresenter>());
+    }
+
+    [Fact]
+    public void AddDictateFlow_ResolvesLlmServices()
+    {
+        using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddDictateFlow(_paths)
+            .BuildServiceProvider();
+
+        Assert.IsType<LLMProviderSelector>(provider.GetRequiredService<ILLMProvider>());
+        Assert.NotNull(provider.GetRequiredService<MockLLMProvider>());
+        Assert.NotNull(provider.GetRequiredService<AzureFoundryLLMProvider>());
+        Assert.NotNull(provider.GetRequiredService<IPromptModeStore>());
+        Assert.NotNull(provider.GetRequiredService<IPromptResolver>());
+        Assert.NotNull(provider.GetRequiredService<IForegroundAppService>());
+        Assert.IsType<NullUsageSink>(provider.GetRequiredService<IUsageSink>());
     }
 
     [Fact]

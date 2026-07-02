@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Prompts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -54,6 +55,11 @@ public partial class App : Application
             _host.Services.GetRequiredService<IDictationResultPresenter>();
 
             await _host.Services.GetRequiredService<ISettingsService>().LoadAsync();
+
+            // Load (and on first run seed) the prompt modes now, so the prompts folder is
+            // populated before the user first opens it and any load warnings surface early.
+            var promptModes = _host.Services.GetRequiredService<IPromptModeStore>().GetAll();
+            _logger.LogInformation("{Count} prompt modes available", promptModes.Count);
 
             await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
             _logger.LogInformation("Database initialized");
