@@ -12,4 +12,9 @@ public interface ITrayIconService : IDisposable
     /// <param name="title">The notification title.</param>
     /// <param name="message">The notification body.</param>
     void ShowErrorNotification(string title, string message);
+
+    /// <summary>Shows a non-blocking warning balloon/toast from the tray icon.</summary>
+    /// <param name="title">The notification title.</param>
+    /// <param name="message">The notification body.</param>
+    void ShowWarningNotification(string title, string message);
 }
