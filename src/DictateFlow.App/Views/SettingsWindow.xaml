@@ -1,0 +1,59 @@
+<Window x:Class="DictateFlow.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DictateFlow Settings"
+        Width="640"
+        Height="440"
+        MinWidth="480"
+        MinHeight="320"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="160" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <ListBox Grid.Row="0"
+                 Grid.Column="0"
+                 Margin="0,0,8,0"
+                 ItemsSource="{Binding Sections}"
+                 SelectedItem="{Binding SelectedSection}" />
+
+        <Border Grid.Row="0"
+                Grid.Column="1"
+                BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                BorderThickness="1"
+                Padding="16">
+            <StackPanel>
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{Binding SelectedSection}" />
+                <TextBlock Margin="0,8,0,0"
+                           Foreground="{x:Static SystemColors.GrayTextBrush}"
+                           TextWrapping="Wrap"
+                           Text="Settings for this section will be added in a later milestone." />
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="2"
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+            <Button Width="88"
+                    Margin="0,0,8,0"
+                    Content="Save"
+                    IsDefault="True"
+                    Command="{Binding SaveCommand}" />
+            <Button Width="88"
+                    Content="Cancel"
+                    IsCancel="True"
+                    Command="{Binding CancelCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>
