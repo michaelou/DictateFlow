@@ -1,0 +1,88 @@
+<Window x:Class="DictateFlow.App.Views.HistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DictateFlow History"
+        Width="640"
+        Height="480"
+        MinWidth="480"
+        MinHeight="320"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar: search + clear all -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right"
+                    Width="88"
+                    Margin="8,0,0,0"
+                    Content="Clear all"
+                    Command="{Binding ClearAllCommand}" />
+            <Button DockPanel.Dock="Right"
+                    Width="88"
+                    Margin="8,0,0,0"
+                    Content="Refresh"
+                    Command="{Binding RefreshCommand}" />
+            <TextBox VerticalContentAlignment="Center"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Search the dictation history" />
+        </DockPanel>
+
+        <!-- Entry list: newest first, per-entry Copy and Delete -->
+        <ListBox Grid.Row="1"
+                 HorizontalContentAlignment="Stretch"
+                 ItemsSource="{Binding Entries}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 SelectedItem="{Binding SelectedEntry}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <DockPanel Margin="0,2">
+                        <StackPanel DockPanel.Dock="Right"
+                                    Margin="8,0,0,0"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <Button Width="52"
+                                    Content="Copy"
+                                    Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                    CommandParameter="{Binding}" />
+                            <Button Width="52"
+                                    Margin="4,0,0,0"
+                                    Content="Delete"
+                                    Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                    CommandParameter="{Binding}" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock FontSize="11"
+                                       Foreground="{x:Static SystemColors.GrayTextBrush}"
+                                       Text="{Binding TimestampText}" />
+                            <TextBlock Text="{Binding Preview}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DockPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Detail pane: full text of the selected entry -->
+        <Expander Grid.Row="2"
+                  Margin="0,8,0,0"
+                  Header="Full text"
+                  IsExpanded="True">
+            <TextBox Height="90"
+                     Margin="0,4,0,0"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     Text="{Binding SelectedEntry.FullText, Mode=OneWay}"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" />
+        </Expander>
+
+        <TextBlock Grid.Row="3"
+                   Margin="0,6,0,0"
+                   Foreground="{x:Static SystemColors.GrayTextBrush}"
+                   Text="{Binding StatusMessage}" />
+    </Grid>
+</Window>

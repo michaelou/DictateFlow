@@ -315,7 +315,7 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
         {
             _usageSink.Record(new UsageRecord(
                 _timeProvider.GetUtcNow().UtcDateTime,
-                UsageCategories.LlmEnhancement,
+                UsageCategories.Llm,
                 DurationSeconds: null,
                 usage.PromptTokens,
                 usage.CompletionTokens));

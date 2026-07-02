@@ -13,4 +13,6 @@ namespace DictateFlow.Core.Models;
 /// <param name="FinalText">The text that was (or would be) delivered; <see langword="null"/> after a cancel or an early failure.</param>
 /// <param name="RawTranscript">The unmodified transcript, when transcription succeeded.</param>
 /// <param name="ErrorMessage">User-presentable failure description (or fallback warning on a gate draft); <see langword="null"/> otherwise.</param>
-public sealed record PipelineResult(bool Success, string? FinalText, string? RawTranscript, string? ErrorMessage);
+/// <param name="IsConfigurationError">Whether the failure is configuration-caused — the UI should offer a shortcut to Settings.</param>
+public sealed record PipelineResult(
+    bool Success, string? FinalText, string? RawTranscript, string? ErrorMessage, bool IsConfigurationError = false);

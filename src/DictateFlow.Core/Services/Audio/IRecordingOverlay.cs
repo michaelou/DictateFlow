@@ -20,7 +20,11 @@ public interface IRecordingOverlay
     void ShowSuccess();
 
     /// <summary>Shows the overlay in the Error state (the dictation pipeline failed).</summary>
-    void ShowError();
+    /// <param name="message">
+    /// Short user-presentable failure summary shown on the overlay, or <see langword="null"/>
+    /// for the generic "Dictation failed" text. Never raw exception text.
+    /// </param>
+    void ShowError(string? message = null);
 
     /// <summary>Hides the overlay.</summary>
     void Hide();

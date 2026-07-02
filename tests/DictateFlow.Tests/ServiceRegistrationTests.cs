@@ -9,6 +9,7 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Usage;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -86,7 +87,9 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<IPromptModeStore>());
         Assert.NotNull(provider.GetRequiredService<IPromptResolver>());
         Assert.NotNull(provider.GetRequiredService<IForegroundAppService>());
-        Assert.IsType<NullUsageSink>(provider.GetRequiredService<IUsageSink>());
+        Assert.IsType<SqliteUsageSink>(provider.GetRequiredService<IUsageSink>());
+        Assert.IsType<SqliteCostService>(provider.GetRequiredService<ICostService>());
+        Assert.IsType<PromptModeSelector>(provider.GetRequiredService<IPromptModeSelector>());
     }
 
     [Fact]

@@ -84,6 +84,16 @@
                              HorizontalAlignment="Left"
                              Text="{Binding SilenceTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
 
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Log level" />
+                    <ComboBox Width="160"
+                              HorizontalAlignment="Left"
+                              ItemsSource="{Binding LogLevels}"
+                              SelectedItem="{Binding SelectedLogLevel}" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Debug writes per-dictation latency details to the log files. Takes effect after a restart." />
+
                     <TextBlock Margin="0,12,0,0"
                                Foreground="Firebrick"
                                TextWrapping="Wrap"
@@ -380,26 +390,14 @@
                                  IsChecked="{Binding IsPreviewOutput}" />
                 </StackPanel>
 
-                <!-- Placeholder for sections that arrive in later milestones -->
+                <!-- Dictionary (technical terms) page -->
                 <StackPanel>
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Visible" />
+                            <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedSection}" Value="General">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding SelectedSection}" Value="Speech">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding SelectedSection}" Value="LLM">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding SelectedSection}" Value="Prompts">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding SelectedSection}" Value="Output">
-                                    <Setter Property="Visibility" Value="Collapsed" />
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Dictionary">
+                                    <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -407,11 +405,183 @@
 
                     <TextBlock FontSize="18"
                                FontWeight="SemiBold"
-                               Text="{Binding SelectedSection}" />
-                    <TextBlock Margin="0,8,0,0"
+                               Text="Technical dictionary" />
+                    <TextBlock Margin="0,4,0,0"
                                Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
                                TextWrapping="Wrap"
-                               Text="Settings for this section will be added in a later milestone." />
+                               Text="Names and jargon the AI must never alter — inserted into every prompt via the {{TechnicalDictionary}} variable." />
+
+                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                        <TextBox Width="240"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding NewDictionaryTerm, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Width="88"
+                                Margin="8,0,0,0"
+                                Content="Add"
+                                Command="{Binding AddDictionaryTermCommand}" />
+                    </StackPanel>
+
+                    <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding DictionaryTerms}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,0,0,4" MaxWidth="340" HorizontalAlignment="Left">
+                                    <Button DockPanel.Dock="Right"
+                                            Width="66"
+                                            Content="Remove"
+                                            Command="{Binding DataContext.RemoveDictionaryTermCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <TextBlock Margin="0,0,8,0"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding}" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Rules (per-application prompt mode) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Rules">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Application rules" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Pick a prompt mode automatically from the app you dictate into. Process name without .exe (e.g. OUTLOOK, devenv); the first matching rule wins, otherwise the active mode applies." />
+
+                    <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding ApplicationRules}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,4" Orientation="Horizontal">
+                                    <TextBox Width="160"
+                                             VerticalContentAlignment="Center"
+                                             Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ComboBox Width="150"
+                                              Margin="8,0,0,0"
+                                              ItemsSource="{Binding DataContext.PromptModeNames, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                              SelectedItem="{Binding PromptMode}" />
+                                    <Button Width="66"
+                                            Margin="8,0,0,0"
+                                            Content="Remove"
+                                            Command="{Binding DataContext.RemoveApplicationRuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Button Width="88"
+                            Margin="0,8,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Add rule"
+                            Command="{Binding AddApplicationRuleCommand}" />
+                </StackPanel>
+
+                <!-- History page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="History">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="History" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Only the delivered final text is stored, locally — never audio or raw transcripts." />
+
+                    <CheckBox Margin="0,12,0,0"
+                              Content="Keep a history of dictated text"
+                              IsChecked="{Binding HistoryEnabled}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max entries" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding HistoryMaxEntries, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Oldest entries are removed once the cap is exceeded. 0 keeps everything." />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Pricing (cost estimation rates) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Pricing">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Pricing" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Rates used to estimate costs on the Cost Dashboard. Enter what your provider charges; changes apply to new dictations only." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Speech price per minute" />
+                    <TextBox Width="120"
+                             HorizontalAlignment="Left"
+                             Text="{Binding PricingSpeechPerMinute, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="LLM price per 1M prompt tokens" />
+                    <TextBox Width="120"
+                             HorizontalAlignment="Left"
+                             Text="{Binding PricingLlmPromptPer1M, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="LLM price per 1M completion tokens" />
+                    <TextBox Width="120"
+                             HorizontalAlignment="Left"
+                             Text="{Binding PricingLlmCompletionPer1M, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Currency" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding PricingCurrency, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="Firebrick"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
                 </StackPanel>
             </Grid>
             </ScrollViewer>

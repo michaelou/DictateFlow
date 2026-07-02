@@ -102,10 +102,13 @@ public partial class App : Application
 
     /// <summary>
     /// Configures the static Serilog logger with a rolling daily file sink under the
-    /// application's logs directory. The minimum level comes from configuration
-    /// (<c>Logging:MinimumLevel</c>) and defaults to Information (Debug in debug builds).
+    /// application's logs directory. The minimum level defaults to Information (Debug in
+    /// debug builds), can be overridden by host configuration (<c>Logging:MinimumLevel</c>),
+    /// and above all honors <c>Logging.MinimumLevel</c> from the app's own
+    /// <c>settings.json</c>. It is read once here, before the host exists — changing the
+    /// setting requires an application restart.
     /// </summary>
-    /// <param name="appPaths">Provides the logs directory.</param>
+    /// <param name="appPaths">Provides the logs directory and the settings file location.</param>
     /// <param name="configuration">Host configuration used for the minimum level override.</param>
     private static void ConfigureSerilog(IAppPaths appPaths, IConfiguration configuration)
     {
@@ -119,6 +122,11 @@ public partial class App : Application
             minimumLevel = configured;
         }
 
+        if (TryReadSettingsFileLogLevel(appPaths.SettingsFilePath, out var fromSettings))
+        {
+            minimumLevel = fromSettings;
+        }
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Is(minimumLevel)
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -130,6 +138,34 @@ public partial class App : Application
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
             .WriteTo.Debug()
             .CreateLogger();
+    }
+
+    /// <summary>
+    /// Reads <c>Logging.MinimumLevel</c> from <c>settings.json</c> without the settings
+    /// service (logging must be configured before the host is built). A missing or
+    /// unreadable file, section or value simply yields <see langword="false"/> — startup
+    /// never fails over a log-level preference.
+    /// </summary>
+    /// <param name="settingsFilePath">Full path of the app's <c>settings.json</c>.</param>
+    /// <param name="level">The parsed level, when the method returns <see langword="true"/>.</param>
+    private static bool TryReadSettingsFileLogLevel(string settingsFilePath, out LogEventLevel level)
+    {
+        level = default;
+        try
+        {
+            if (!File.Exists(settingsFilePath))
+            {
+                return false;
+            }
+
+            var settings = System.Text.Json.JsonSerializer.Deserialize<Core.Models.AppSettings>(
+                File.ReadAllText(settingsFilePath), SettingsService.SerializerOptions);
+            return Enum.TryParse(settings?.Logging.MinimumLevel, ignoreCase: true, out level);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -147,7 +183,9 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         LogError(e.Exception, "Unhandled dispatcher exception");
-        _trayIconService?.ShowErrorNotification("DictateFlow error", e.Exception.Message);
+        // No raw exception text reaches the user — the details are in the log.
+        _trayIconService?.ShowErrorNotification(
+            "DictateFlow error", "An unexpected error occurred — see the log for details.");
         // Keep the app alive: a tray app should not die because one UI action failed.
         e.Handled = true;
     }
@@ -155,7 +193,8 @@ public partial class App : Application
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
         LogError(e.Exception, "Unobserved task exception");
-        _trayIconService?.ShowErrorNotification("DictateFlow error", e.Exception.GetBaseException().Message);
+        _trayIconService?.ShowErrorNotification(
+            "DictateFlow error", "An unexpected error occurred — see the log for details.");
         e.SetObserved();
     }
 

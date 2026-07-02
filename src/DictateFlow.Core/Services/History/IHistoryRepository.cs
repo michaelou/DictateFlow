@@ -1,17 +1,37 @@
+using DictateFlow.Core.Models;
+
 namespace DictateFlow.Core.Services.History;
 
 /// <summary>
-/// Write access to the dictation history stored in the local SQLite database. Only the final
-/// text is ever persisted — never audio or raw transcripts. The browsing/search UI arrives
-/// in M6; M5 only needs the write path.
+/// Access to the dictation history stored in the local SQLite database. Only the final
+/// text is ever persisted — never audio or raw transcripts.
 /// </summary>
 public interface IHistoryRepository
 {
     /// <summary>
-    /// Appends a history entry. A no-op when the <c>History.Enabled</c> setting is off.
+    /// Appends a history entry, then prunes the oldest entries beyond the
+    /// <c>History.MaxEntries</c> cap. A no-op when the <c>History.Enabled</c> setting is off.
     /// </summary>
     /// <param name="timestampUtc">When the dictation completed, in UTC.</param>
     /// <param name="finalText">The text that was delivered to the user.</param>
     /// <param name="cancellationToken">Cancels the pending database I/O.</param>
     Task AddAsync(DateTime timestampUtc, string finalText, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns entries newest-first, optionally filtered by a case-insensitive
+    /// <c>LIKE %query%</c> match on the final text.
+    /// </summary>
+    /// <param name="query">Substring to match; <see langword="null"/> or whitespace returns everything.</param>
+    /// <param name="limit">Maximum number of entries to return.</param>
+    /// <param name="cancellationToken">Cancels the pending database I/O.</param>
+    Task<IReadOnlyList<HistoryEntry>> SearchAsync(string? query, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one entry by id; a no-op when the id does not exist.</summary>
+    /// <param name="id">Database identity of the entry to delete.</param>
+    /// <param name="cancellationToken">Cancels the pending database I/O.</param>
+    Task DeleteAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes all history entries.</summary>
+    /// <param name="cancellationToken">Cancels the pending database I/O.</param>
+    Task ClearAsync(CancellationToken cancellationToken = default);
 }

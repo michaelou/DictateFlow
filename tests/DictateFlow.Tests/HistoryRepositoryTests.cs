@@ -79,6 +79,116 @@ public sealed class HistoryRepositoryTests : IDisposable
         Assert.Equal(["while enabled"], await ReadFinalTextsAsync(_paths));
     }
 
+    [Fact]
+    public async Task SearchAsync_NoQuery_ReturnsEverythingNewestFirst()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "first");
+        await _repository.AddAsync(DateTime.UtcNow, "second");
+        await _repository.AddAsync(DateTime.UtcNow, "third");
+
+        var entries = await _repository.SearchAsync(null, limit: 100);
+
+        Assert.Equal(["third", "second", "first"], entries.Select(e => e.FinalText));
+    }
+
+    [Fact]
+    public async Task SearchAsync_Query_MatchesSubstringCaseInsensitively()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "Meeting notes about Belugga");
+        await _repository.AddAsync(DateTime.UtcNow, "Grocery list");
+        await _repository.AddAsync(DateTime.UtcNow, "belugga follow-up");
+
+        var entries = await _repository.SearchAsync("BELUGGA", limit: 100);
+
+        Assert.Equal(["belugga follow-up", "Meeting notes about Belugga"], entries.Select(e => e.FinalText));
+    }
+
+    [Fact]
+    public async Task SearchAsync_LimitCapsTheResultCount()
+    {
+        for (var i = 1; i <= 5; i++)
+        {
+            await _repository.AddAsync(DateTime.UtcNow, $"entry {i}");
+        }
+
+        var entries = await _repository.SearchAsync(null, limit: 2);
+
+        Assert.Equal(["entry 5", "entry 4"], entries.Select(e => e.FinalText));
+    }
+
+    [Fact]
+    public async Task SearchAsync_LikeWildcardsInQuery_MatchLiterally()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "100% done");
+        await _repository.AddAsync(DateTime.UtcNow, "100 percent done");
+
+        var entries = await _repository.SearchAsync("100%", limit: 100);
+
+        Assert.Equal(["100% done"], entries.Select(e => e.FinalText));
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReturnsUtcTimestampAndId()
+    {
+        var timestamp = new DateTime(2026, 7, 2, 13, 45, 30, DateTimeKind.Utc);
+        await _repository.AddAsync(timestamp, "hello");
+
+        var entry = Assert.Single(await _repository.SearchAsync(null, limit: 10));
+
+        Assert.True(entry.Id > 0);
+        Assert.Equal(timestamp, entry.TimestampUtc);
+        Assert.Equal(DateTimeKind.Utc, entry.TimestampUtc.Kind);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_RemovesOnlyTheGivenEntry()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "keep me");
+        await _repository.AddAsync(DateTime.UtcNow, "delete me");
+        var target = (await _repository.SearchAsync("delete me", limit: 10)).Single();
+
+        await _repository.DeleteAsync(target.Id);
+
+        Assert.Equal(["keep me"], await ReadFinalTextsAsync(_paths));
+    }
+
+    [Fact]
+    public async Task ClearAsync_RemovesEverything()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "one");
+        await _repository.AddAsync(DateTime.UtcNow, "two");
+
+        await _repository.ClearAsync();
+
+        Assert.Empty(await ReadFinalTextsAsync(_paths));
+    }
+
+    [Fact]
+    public async Task AddAsync_BeyondMaxEntries_PrunesTheOldest()
+    {
+        _appSettings.History.MaxEntries = 3;
+
+        for (var i = 1; i <= 5; i++)
+        {
+            await _repository.AddAsync(DateTime.UtcNow, $"entry {i}");
+        }
+
+        Assert.Equal(["entry 3", "entry 4", "entry 5"], await ReadFinalTextsAsync(_paths));
+    }
+
+    [Fact]
+    public async Task AddAsync_MaxEntriesZero_KeepsEverything()
+    {
+        _appSettings.History.MaxEntries = 0;
+
+        for (var i = 1; i <= 5; i++)
+        {
+            await _repository.AddAsync(DateTime.UtcNow, $"entry {i}");
+        }
+
+        Assert.Equal(5, (await ReadFinalTextsAsync(_paths)).Count);
+    }
+
     /// <summary>Reads all History rows straight from the database file (Id order).</summary>
     private static async Task<List<(string TimestampUtc, string FinalText)>> ReadHistoryAsync(IAppPaths paths)
     {

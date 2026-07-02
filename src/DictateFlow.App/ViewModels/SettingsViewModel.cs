@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,6 +16,18 @@ namespace DictateFlow.App.ViewModels;
 /// <param name="DeviceId">Persisted device identifier, or <see langword="null"/> for the system default.</param>
 /// <param name="DisplayName">Name shown in the dropdown.</param>
 public sealed record MicrophoneOption(string? DeviceId, string DisplayName);
+
+/// <summary>One editable row on the Rules settings page.</summary>
+public partial class ApplicationRuleItem : ObservableObject
+{
+    /// <summary>Gets or sets the foreground process name to match (without <c>.exe</c>).</summary>
+    [ObservableProperty]
+    private string _processName = "";
+
+    /// <summary>Gets or sets the prompt-mode name applied when the rule matches.</summary>
+    [ObservableProperty]
+    private string _promptMode = "";
+}
 
 /// <summary>
 /// View model backing the Settings window. Exposes the section navigation skeleton plus the
@@ -103,11 +116,33 @@ public partial class SettingsViewModel : ObservableObject
             output.Provider, OutputProviderNames.SimulatedKeyboard, StringComparison.OrdinalIgnoreCase);
         _isAutomaticOutput = !string.Equals(
             output.Mode, OutputModes.Preview, StringComparison.OrdinalIgnoreCase);
+
+        var history = _settingsService.Current.History;
+        _historyEnabled = history.Enabled;
+        _historyMaxEntries = history.MaxEntries;
+
+        DictionaryTerms = [.. _settingsService.Current.TechnicalDictionary];
+        ApplicationRules = [.. _settingsService.Current.ApplicationRules
+            .Select(r => new ApplicationRuleItem { ProcessName = r.ProcessName, PromptMode = r.PromptMode })];
+
+        var pricing = _settingsService.Current.Pricing;
+        _pricingSpeechPerMinute = pricing.SpeechPerMinute;
+        _pricingLlmPromptPer1M = pricing.LlmPromptPer1M;
+        _pricingLlmCompletionPer1M = pricing.LlmCompletionPer1M;
+        _pricingCurrency = pricing.Currency;
+
+        _selectedLogLevel = LogLevels.FirstOrDefault(
+            l => string.Equals(l, _settingsService.Current.Logging.MinimumLevel, StringComparison.OrdinalIgnoreCase))
+            ?? "Information";
     }
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "LLM", "Prompts", "Output", "History"];
+        ["General", "Speech", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing"];
+
+    /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
+    public IReadOnlyList<string> LogLevels { get; } =
+        ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal"];
 
     /// <summary>Gets or sets the currently selected navigation section.</summary>
     [ObservableProperty]
@@ -186,6 +221,7 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Gets or sets the loaded prompt modes shown on the Prompts page.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PromptModeNames))]
     private IReadOnlyList<PromptMode> _promptModes;
 
     /// <summary>Gets or sets the mode persisted as <c>ActivePromptMode</c> on Save.</summary>
@@ -207,6 +243,47 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the resolved system prompt shown in the tester's preview expander.</summary>
     [ObservableProperty]
     private string? _testerResolvedPrompt;
+
+    /// <summary>Gets or sets a value indicating whether dictation history is persisted.</summary>
+    [ObservableProperty]
+    private bool _historyEnabled;
+
+    /// <summary>Gets or sets the history entry cap (0 keeps everything).</summary>
+    [ObservableProperty]
+    private int _historyMaxEntries;
+
+    /// <summary>Gets the editable technical dictionary terms.</summary>
+    public ObservableCollection<string> DictionaryTerms { get; }
+
+    /// <summary>Gets or sets the term typed into the dictionary add box.</summary>
+    [ObservableProperty]
+    private string _newDictionaryTerm = "";
+
+    /// <summary>Gets the editable application rules.</summary>
+    public ObservableCollection<ApplicationRuleItem> ApplicationRules { get; }
+
+    /// <summary>Gets the prompt-mode names offered by the rules dropdown.</summary>
+    public IReadOnlyList<string> PromptModeNames => [.. PromptModes.Select(m => m.Name)];
+
+    /// <summary>Gets or sets the speech price per minute of audio.</summary>
+    [ObservableProperty]
+    private double _pricingSpeechPerMinute;
+
+    /// <summary>Gets or sets the LLM price per one million prompt tokens.</summary>
+    [ObservableProperty]
+    private double _pricingLlmPromptPer1M;
+
+    /// <summary>Gets or sets the LLM price per one million completion tokens.</summary>
+    [ObservableProperty]
+    private double _pricingLlmCompletionPer1M;
+
+    /// <summary>Gets or sets the display currency code.</summary>
+    [ObservableProperty]
+    private string _pricingCurrency;
+
+    /// <summary>Gets or sets the minimum log level persisted to <c>Logging.MinimumLevel</c> (applied after a restart).</summary>
+    [ObservableProperty]
+    private string _selectedLogLevel;
 
     /// <summary>Gets or sets a value indicating whether push-to-talk mode is selected.</summary>
     public bool IsPushToTalk
@@ -342,6 +419,18 @@ public partial class SettingsViewModel : ObservableObject
             return;
         }
 
+        if (HistoryMaxEntries < 0)
+        {
+            ValidationError = "History max entries cannot be negative (0 keeps everything).";
+            return;
+        }
+
+        if (PricingSpeechPerMinute < 0 || PricingLlmPromptPer1M < 0 || PricingLlmCompletionPer1M < 0)
+        {
+            ValidationError = "Pricing rates cannot be negative.";
+            return;
+        }
+
         ValidationError = null;
 
         var recording = _settingsService.Current.Recording;
@@ -357,6 +446,23 @@ public partial class SettingsViewModel : ObservableObject
         var output = _settingsService.Current.Output;
         output.Provider = IsClipboardPasteOutput ? OutputProviderNames.ClipboardPaste : OutputProviderNames.SimulatedKeyboard;
         output.Mode = IsAutomaticOutput ? OutputModes.Automatic : OutputModes.Preview;
+
+        var history = _settingsService.Current.History;
+        history.Enabled = HistoryEnabled;
+        history.MaxEntries = HistoryMaxEntries;
+
+        _settingsService.Current.TechnicalDictionary = [.. DictionaryTerms];
+        _settingsService.Current.ApplicationRules = [.. ApplicationRules
+            .Where(r => !string.IsNullOrWhiteSpace(r.ProcessName))
+            .Select(r => new ApplicationRule { ProcessName = r.ProcessName.Trim(), PromptMode = r.PromptMode })];
+
+        var pricing = _settingsService.Current.Pricing;
+        pricing.SpeechPerMinute = PricingSpeechPerMinute;
+        pricing.LlmPromptPer1M = PricingLlmPromptPer1M;
+        pricing.LlmCompletionPer1M = PricingLlmCompletionPer1M;
+        pricing.Currency = PricingCurrency.Trim();
+
+        _settingsService.Current.Logging.MinimumLevel = SelectedLogLevel;
 
         await _settingsService.SaveAsync(cancellationToken);
         _logger.LogInformation("Settings saved from Settings window");
@@ -525,6 +631,60 @@ public partial class SettingsViewModel : ObservableObject
         {
             _logger.LogWarning(ex, "Prompt tester run failed unexpectedly");
             TesterResult = $"✗ {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Adds the typed term to the technical dictionary, ignoring blanks and case-insensitive
+    /// duplicates.
+    /// </summary>
+    [RelayCommand]
+    private void AddDictionaryTerm()
+    {
+        var term = NewDictionaryTerm.Trim();
+        if (term.Length == 0)
+        {
+            return;
+        }
+
+        if (DictionaryTerms.Any(t => string.Equals(t, term, StringComparison.OrdinalIgnoreCase)))
+        {
+            ValidationError = $"'{term}' is already in the dictionary.";
+            return;
+        }
+
+        DictionaryTerms.Add(term);
+        NewDictionaryTerm = "";
+        ValidationError = null;
+    }
+
+    /// <summary>Removes one term from the technical dictionary.</summary>
+    /// <param name="term">The term to remove.</param>
+    [RelayCommand]
+    private void RemoveDictionaryTerm(string? term)
+    {
+        if (term is not null)
+        {
+            DictionaryTerms.Remove(term);
+        }
+    }
+
+    /// <summary>Appends an empty application rule row for editing.</summary>
+    [RelayCommand]
+    private void AddApplicationRule()
+        => ApplicationRules.Add(new ApplicationRuleItem
+        {
+            PromptMode = PromptModeNames.FirstOrDefault() ?? "",
+        });
+
+    /// <summary>Removes one application rule row.</summary>
+    /// <param name="rule">The row to remove.</param>
+    [RelayCommand]
+    private void RemoveApplicationRule(ApplicationRuleItem? rule)
+    {
+        if (rule is not null)
+        {
+            ApplicationRules.Remove(rule);
         }
     }
 

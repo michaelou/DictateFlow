@@ -22,14 +22,37 @@ public sealed class AppSettings
     /// <summary>Gets or sets the dictation history configuration (consumed in M6).</summary>
     public HistorySettings History { get; set; } = new();
 
+    /// <summary>Gets or sets the provider pricing rates used for cost estimation (consumed in M6).</summary>
+    public PricingSettings Pricing { get; set; } = new();
+
+    /// <summary>Gets or sets the diagnostic logging configuration (consumed in M6).</summary>
+    public LoggingSettings Logging { get; set; } = new();
+
     /// <summary>Gets or sets the name of the active prompt mode used for LLM enhancement (consumed in M4).</summary>
     public string ActivePromptMode { get; set; } = "Raw";
 
     /// <summary>Gets or sets user-defined technical terms that bias transcription and enhancement (consumed in M4).</summary>
     public List<string> TechnicalDictionary { get; set; } = [];
 
-    /// <summary>Gets or sets per-application output rules (consumed in later milestones).</summary>
-    public List<string> ApplicationRules { get; set; } = [];
+    /// <summary>
+    /// Gets or sets the per-application prompt-mode rules (consumed in M6). Evaluated in order
+    /// against the foreground process name captured at record-start; the first match wins and
+    /// no match falls back to <see cref="ActivePromptMode"/>.
+    /// </summary>
+    public List<ApplicationRule> ApplicationRules { get; set; } = [];
+}
+
+/// <summary>
+/// One per-application prompt-mode rule: dictations started while <see cref="ProcessName"/>
+/// is the foreground process use <see cref="PromptMode"/> instead of the active mode.
+/// </summary>
+public sealed class ApplicationRule
+{
+    /// <summary>Gets or sets the foreground process name to match (without <c>.exe</c>, case-insensitive, e.g. <c>OUTLOOK</c>).</summary>
+    public string ProcessName { get; set; } = "";
+
+    /// <summary>Gets or sets the name of the prompt mode selected when the rule matches.</summary>
+    public string PromptMode { get; set; } = "";
 }
 
 /// <summary>Audio recording settings.</summary>
@@ -104,4 +127,41 @@ public sealed class HistorySettings
 {
     /// <summary>Gets or sets a value indicating whether dictation history is persisted to the local database.</summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the maximum number of history entries kept; the oldest entries are pruned
+    /// on insert once the cap is exceeded. Zero or negative disables pruning.
+    /// </summary>
+    public int MaxEntries { get; set; } = 1000;
+}
+
+/// <summary>
+/// Provider pricing rates used to estimate the cost of each billable call at insert time.
+/// Purely informational — DictateFlow never bills anything; the rates mirror what the user's
+/// Azure subscription charges.
+/// </summary>
+public sealed class PricingSettings
+{
+    /// <summary>Gets or sets the speech-to-text price per minute of audio.</summary>
+    public double SpeechPerMinute { get; set; } = 0.006;
+
+    /// <summary>Gets or sets the LLM price per one million prompt tokens.</summary>
+    public double LlmPromptPer1M { get; set; } = 2.50;
+
+    /// <summary>Gets or sets the LLM price per one million completion tokens.</summary>
+    public double LlmCompletionPer1M { get; set; } = 10.00;
+
+    /// <summary>Gets or sets the display currency code (e.g. <c>USD</c>); no conversion is performed.</summary>
+    public string Currency { get; set; } = "USD";
+}
+
+/// <summary>Diagnostic logging settings.</summary>
+public sealed class LoggingSettings
+{
+    /// <summary>
+    /// Gets or sets the minimum Serilog log level (<c>Verbose</c>, <c>Debug</c>,
+    /// <c>Information</c>, <c>Warning</c>, <c>Error</c> or <c>Fatal</c>). Read once at
+    /// startup — changing it requires an application restart.
+    /// </summary>
+    public string MinimumLevel { get; set; } = "Information";
 }
