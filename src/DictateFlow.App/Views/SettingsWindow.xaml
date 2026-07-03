@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:DictateFlow.App.Controls"
         Title="DictateFlow Settings"
+        Background="{DynamicResource WindowBackgroundBrush}"
         Width="640"
         Height="440"
         MinWidth="480"
@@ -26,7 +27,7 @@
 
         <Border Grid.Row="0"
                 Grid.Column="1"
-                BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                BorderBrush="{StaticResource SurfaceBorderBrush}"
                 BorderThickness="1"
                 Padding="16">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -67,7 +68,7 @@
                              IsReadOnlyCaretVisible="False"
                              Text="{Binding Hotkey, Mode=OneWay}"
                              PreviewKeyDown="OnHotkeyBoxPreviewKeyDown" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Click the box and press the desired key combination." />
@@ -89,13 +90,13 @@
                               HorizontalAlignment="Left"
                               ItemsSource="{Binding LogLevels}"
                               SelectedItem="{Binding SelectedLogLevel}" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Debug writes per-dictation latency details to the log files. Takes effect after a restart." />
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
@@ -117,7 +118,7 @@
                                FontWeight="SemiBold"
                                Text="Speech recognition" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="The provider that turns recordings into text. The Mock provider returns canned text, so the whole flow works without any cloud service." />
@@ -203,7 +204,7 @@
                                Text="{Binding SpeechTestResult}" />
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
@@ -225,7 +226,7 @@
                                FontWeight="SemiBold"
                                Text="LLM enhancement" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="The provider that turns raw transcripts into polished text. The Mock provider prefixes the transcript, so the whole flow works without any cloud service." />
@@ -277,7 +278,7 @@
                                      Margin="8,0,0,0"
                                      Text="{Binding LlmTemperature, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                        <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                    FontSize="11"
                                    Margin="0,2,0,0"
                                    Text="Default for modes without their own temperature." />
@@ -322,7 +323,7 @@
                                Text="{Binding LlmTestResult}" />
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
@@ -344,7 +345,7 @@
                                FontWeight="SemiBold"
                                Text="Prompt modes" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="One JSON file per mode in the prompts folder. Edit or add files, then Reload to pick them up." />
@@ -363,7 +364,7 @@
                                 <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
                                     <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
                                     <TextBlock Margin="8,0,0,0"
-                                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
                                                TextWrapping="Wrap"
                                                Text="{Binding Description}" />
                                 </StackPanel>
@@ -387,7 +388,7 @@
                                FontWeight="SemiBold"
                                Text="Prompt Tester" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Paste a transcript and run it through the resolver and LLM — no recording needed." />
@@ -451,7 +452,7 @@
                                FontWeight="SemiBold"
                                Text="Output" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="How dictated text is delivered into the application that had focus. Changes apply from the next dictation." />
@@ -461,7 +462,7 @@
                               HorizontalAlignment="Left"
                               ItemsSource="{Binding OutputProviders}"
                               SelectedItem="{Binding SelectedOutputProvider}" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                TextWrapping="Wrap"
@@ -494,7 +495,7 @@
                                FontWeight="SemiBold"
                                Text="Technical dictionary" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Names and jargon the AI must never alter — inserted into every prompt via the {{TechnicalDictionary}} variable." />
@@ -527,7 +528,7 @@
                     </ItemsControl>
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
@@ -549,7 +550,7 @@
                                FontWeight="SemiBold"
                                Text="Application rules" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Pick a prompt mode automatically from the app you dictate into. Process name without .exe (e.g. OUTLOOK, devenv); the first matching rule wins, otherwise the active mode applies." />
@@ -599,7 +600,7 @@
                                FontWeight="SemiBold"
                                Text="History" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Only the delivered final text is stored, locally — never audio or raw transcripts." />
@@ -612,13 +613,13 @@
                     <TextBox Width="80"
                              HorizontalAlignment="Left"
                              Text="{Binding HistoryMaxEntries, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Oldest entries are removed once the cap is exceeded. 0 keeps everything." />
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
@@ -640,7 +641,7 @@
                                FontWeight="SemiBold"
                                Text="Pricing" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Rates used to estimate costs on the Cost Dashboard. Enter what your provider charges; changes apply to new dictations only." />
@@ -666,7 +667,7 @@
                              Text="{Binding PricingCurrency, UpdateSourceTrigger=PropertyChanged}" />
 
                     <TextBlock Margin="0,12,0,0"
-                               Foreground="Firebrick"
+                               Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
