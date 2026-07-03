@@ -577,9 +577,9 @@ public partial class SettingsViewModel : ObservableObject
     /// Applies a chord captured by the push-to-talk hotkey textbox. Called by the view's
     /// key-capture handler with raw key data; formatting goes through <see cref="HotkeyParser"/>.
     /// </summary>
-    /// <param name="modifiers">The modifier keys held down.</param>
-    /// <param name="virtualKey">The virtual-key code of the pressed main key.</param>
-    public void CapturePushToTalkHotkey(HotkeyModifiers modifiers, uint virtualKey)
+    /// <param name="modifiers">The side-specific modifier requirements held down.</param>
+    /// <param name="virtualKey">The virtual-key code of the pressed main key, or <see langword="null"/> for a modifier-only chord.</param>
+    public void CapturePushToTalkHotkey(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey)
     {
         if (TryCaptureChord(modifiers, virtualKey, out var formatted))
         {
@@ -588,9 +588,9 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>Applies a chord captured by the toggle hotkey textbox. See <see cref="CapturePushToTalkHotkey"/>.</summary>
-    /// <param name="modifiers">The modifier keys held down.</param>
-    /// <param name="virtualKey">The virtual-key code of the pressed main key.</param>
-    public void CaptureToggleHotkey(HotkeyModifiers modifiers, uint virtualKey)
+    /// <param name="modifiers">The side-specific modifier requirements held down.</param>
+    /// <param name="virtualKey">The virtual-key code of the pressed main key, or <see langword="null"/> for a modifier-only chord.</param>
+    public void CaptureToggleHotkey(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey)
     {
         if (TryCaptureChord(modifiers, virtualKey, out var formatted))
         {
@@ -614,10 +614,10 @@ public partial class SettingsViewModel : ObservableObject
         ValidationError = null;
     }
 
-    /// <summary>Formats a captured chord, or reports an invalid key via <see cref="ValidationError"/>.</summary>
-    private bool TryCaptureChord(HotkeyModifiers modifiers, uint virtualKey, out string formatted)
+    /// <summary>Formats a captured chord, or reports an invalid combination via <see cref="ValidationError"/>.</summary>
+    private bool TryCaptureChord(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey, out string formatted)
     {
-        if (HotkeyParser.TryFromVirtualKey(modifiers, virtualKey, out var chord))
+        if (HotkeyParser.TryFromCapture(modifiers, virtualKey, out var chord))
         {
             formatted = chord.ToString();
             ValidationError = null;
@@ -625,7 +625,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         formatted = "";
-        ValidationError = "That key cannot be used as a hotkey.";
+        ValidationError = "That key combination cannot be used as a hotkey.";
         return false;
     }
 

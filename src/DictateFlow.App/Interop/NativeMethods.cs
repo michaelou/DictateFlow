@@ -5,8 +5,6 @@ namespace DictateFlow.App.Interop;
 /// <summary>Win32 P/Invoke declarations for global hotkeys, keyboard hooks, window styles and input injection.</summary>
 internal static class NativeMethods
 {
-    public const int WmHotkey = 0x0312;
-
     /// <summary><c>INPUT.type</c> value for keyboard events.</summary>
     public const uint InputKeyboard = 1;
 
@@ -26,9 +24,6 @@ internal static class NativeMethods
     public const int WmSysKeyDown = 0x0104;
     public const int WmSysKeyUp = 0x0105;
 
-    /// <summary>Message-only window parent handle (<c>HWND_MESSAGE</c>).</summary>
-    public static readonly IntPtr HwndMessage = new(-3);
-
     public const int GwlExStyle = -20;
     public const int WsExTransparent = 0x00000020;
     public const int WsExToolWindow = 0x00000080;
@@ -46,14 +41,6 @@ internal static class NativeMethods
         public uint Time;
         public IntPtr ExtraInfo;
     }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);

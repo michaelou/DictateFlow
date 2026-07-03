@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Threading;
 using DictateFlow.App.Interop;
 using DictateFlow.Core.Models;
@@ -11,17 +10,23 @@ using Microsoft.Extensions.Logging;
 namespace DictateFlow.App.Services.Audio;
 
 /// <summary>
-/// Global hotkey listener. The toggle hotkey uses <c>RegisterHotKey</c> against a hidden
-/// message-only window (<c>WM_HOTKEY</c>); the push-to-talk hotkey installs a low-level
-/// keyboard hook (<c>WH_KEYBOARD_LL</c>) because <c>RegisterHotKey</c> cannot report
-/// key-up. Both are independent and armed simultaneously; either is skipped when its hotkey
-/// is empty. <see cref="Apply"/> tears down the previous registration and re-arms, so
-/// settings changes take effect without a restart.
+/// Global hotkey listener. Both the toggle and push-to-talk hotkeys are watched through a
+/// single low-level keyboard hook (<c>WH_KEYBOARD_LL</c>): the hook is the only mechanism that
+/// reports key-up (needed by push-to-talk) and left/right-specific modifier keys (needed for
+/// side-specific and modifier-only chords, which <c>RegisterHotKey</c> cannot express). Both
+/// chords are matched independently on every key event; either is skipped when its hotkey is
+/// empty. <see cref="Apply"/> tears down the previous registration and re-arms, so settings
+/// changes take effect without a restart.
 /// </summary>
+/// <remarks>
+/// Only a main key is ever swallowed (so it does not type into the focused app). Modifier keys
+/// are never swallowed — their key-down reaches the OS before a chord can complete, so swallowing
+/// the matching key-up would strand the modifier "down". A consequence is that modifier-only
+/// chords (e.g. <c>Ctrl+Win</c>) are detected but not suppressed: any incidental system behavior
+/// of that combination still occurs.
+/// </remarks>
 public sealed class HotkeyService : IHotkeyService
 {
-    private const int HotkeyId = 0xD1C7;
-
     private readonly ILogger<HotkeyService> _logger;
 
     // Resolved lazily: TrayIconService (via TrayViewModel → DictationController) depends
@@ -34,10 +39,9 @@ public sealed class HotkeyService : IHotkeyService
     private readonly HashSet<uint> _pressedModifierKeys = [];
 
     private Dispatcher? _dispatcher;
-    private HwndSource? _hotkeyWindow;
     private IntPtr _hookHandle;
-    private HotkeyChord? _pttChord;
-    private bool _mainKeyDown;
+    private ChordState? _toggleState;
+    private ChordState? _pttState;
 
     /// <summary>Initializes a new instance of the <see cref="HotkeyService"/> class.</summary>
     /// <param name="serviceProvider">Used to resolve the tray icon service for failure notifications.</param>
@@ -66,7 +70,7 @@ public sealed class HotkeyService : IHotkeyService
     public void Dispose()
         => OnDispatcher(TearDown);
 
-    /// <summary>Runs <paramref name="action"/> on the UI thread — hotkey registration and hooks need its message loop.</summary>
+    /// <summary>Runs <paramref name="action"/> on the UI thread — the keyboard hook needs its message loop.</summary>
     private void OnDispatcher(Action action)
     {
         var dispatcher = Application.Current?.Dispatcher;
@@ -86,60 +90,36 @@ public sealed class HotkeyService : IHotkeyService
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
         // The two hotkeys are independent: a failure or empty value in one never affects the other.
-        ArmHotkey(settings.ToggleHotkey, "toggle", RegisterToggleHotkey);
-        ArmHotkey(settings.PushToTalkHotkey, "push-to-talk", InstallPushToTalkHook);
+        _toggleState = BuildState(settings.ToggleHotkey, "toggle", isToggle: true);
+        _pttState = BuildState(settings.PushToTalkHotkey, "push-to-talk", isToggle: false);
+
+        if (_toggleState is not null || _pttState is not null)
+        {
+            InstallHook();
+        }
     }
 
-    /// <summary>Parses <paramref name="hotkey"/> and arms it via <paramref name="arm"/>; empty is skipped, unparseable is reported.</summary>
-    private void ArmHotkey(string? hotkey, string label, Action<HotkeyChord> arm)
+    /// <summary>Parses <paramref name="hotkey"/> into a chord state; empty is skipped, unparseable is reported.</summary>
+    private ChordState? BuildState(string? hotkey, string label, bool isToggle)
     {
         if (string.IsNullOrWhiteSpace(hotkey))
         {
-            return;
+            return null;
         }
 
         if (!HotkeyParser.TryParse(hotkey, out var chord))
         {
             _logger.LogWarning("The {Label} hotkey '{Hotkey}' could not be parsed; it is not active", label, hotkey);
             NotifyHotkeyProblem($"'{hotkey}' is not a valid {label} hotkey. Fix it in Settings.");
-            return;
+            return null;
         }
 
-        arm(chord);
+        _logger.LogInformation("{Label} hotkey {Chord} armed via keyboard hook", label, chord);
+        return new ChordState(chord, isToggle);
     }
 
-    private void RegisterToggleHotkey(HotkeyChord chord)
+    private void InstallHook()
     {
-        var parameters = new HwndSourceParameters("DictateFlowHotkeyWindow")
-        {
-            Width = 0,
-            Height = 0,
-            PositionX = 0,
-            PositionY = 0,
-            WindowStyle = 0,
-            ParentWindow = NativeMethods.HwndMessage,
-        };
-
-        _hotkeyWindow = new HwndSource(parameters);
-        _hotkeyWindow.AddHook(OnWindowMessage);
-
-        if (NativeMethods.RegisterHotKey(_hotkeyWindow.Handle, HotkeyId, (uint)chord.Modifiers, chord.VirtualKey))
-        {
-            _logger.LogInformation("Toggle hotkey {Chord} registered", chord);
-        }
-        else
-        {
-            var error = Marshal.GetLastWin32Error();
-            _logger.LogWarning("RegisterHotKey failed for {Chord} (Win32 error {Error}); the hotkey may be in use", chord, error);
-            NotifyHotkeyProblem($"Could not register '{chord}' — it may be in use by another application.");
-        }
-    }
-
-    private void InstallPushToTalkHook(HotkeyChord chord)
-    {
-        _pttChord = chord;
-        _pressedModifierKeys.Clear();
-        _mainKeyDown = false;
         _hookHandle = NativeMethods.SetWindowsHookEx(
             NativeMethods.WhKeyboardLl,
             _hookProc,
@@ -149,78 +129,43 @@ public sealed class HotkeyService : IHotkeyService
         if (_hookHandle == IntPtr.Zero)
         {
             var error = Marshal.GetLastWin32Error();
-            _logger.LogWarning("SetWindowsHookEx failed (Win32 error {Error}); push-to-talk hotkey is unavailable", error);
-            NotifyHotkeyProblem("Could not install the push-to-talk keyboard hook.");
-        }
-        else
-        {
-            _logger.LogInformation("Push-to-talk hotkey {Chord} armed via keyboard hook", chord);
+            _logger.LogWarning("SetWindowsHookEx failed (Win32 error {Error}); hotkeys are unavailable", error);
+            NotifyHotkeyProblem("Could not install the keyboard hook; hotkeys are unavailable.");
         }
     }
 
     private void TearDown()
     {
-        if (_hotkeyWindow is not null)
-        {
-            NativeMethods.UnregisterHotKey(_hotkeyWindow.Handle, HotkeyId);
-            _hotkeyWindow.RemoveHook(OnWindowMessage);
-            _hotkeyWindow.Dispose();
-            _hotkeyWindow = null;
-        }
-
         if (_hookHandle != IntPtr.Zero)
         {
             NativeMethods.UnhookWindowsHookEx(_hookHandle);
             _hookHandle = IntPtr.Zero;
         }
 
-        _pttChord = null;
-        _mainKeyDown = false;
+        _toggleState = null;
+        _pttState = null;
         _pressedModifierKeys.Clear();
-    }
-
-    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == NativeMethods.WmHotkey && wParam.ToInt64() == HotkeyId)
-        {
-            RaiseAsync(TogglePressed);
-            handled = true;
-        }
-
-        return IntPtr.Zero;
     }
 
     private IntPtr OnKeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && _pttChord is { } chord)
+        if (nCode >= 0)
         {
             var info = Marshal.PtrToStructure<NativeMethods.KbdLlHookStruct>(lParam);
             var message = wParam.ToInt64();
             var isDown = message is NativeMethods.WmKeyDown or NativeMethods.WmSysKeyDown;
             var isUp = message is NativeMethods.WmKeyUp or NativeMethods.WmSysKeyUp;
 
-            UpdateModifierState(info.VkCode, isDown);
-
-            if (info.VkCode == chord.VirtualKey)
+            if (isDown || isUp)
             {
-                if (isDown)
-                {
-                    // _mainKeyDown filters keyboard auto-repeat: only the first down fires.
-                    if (!_mainKeyDown && (PressedModifiers() & chord.Modifiers) == chord.Modifiers)
-                    {
-                        _mainKeyDown = true;
-                        RaiseAsync(PushToTalkPressed);
-                    }
+                UpdateModifierState(info.VkCode, isDown);
 
-                    if (_mainKeyDown)
-                    {
-                        return 1; // swallow so the key does not type into the focused app
-                    }
-                }
-                else if (isUp && _mainKeyDown)
+                // Evaluate both chords; either may want to swallow this key so it does not
+                // reach the focused application.
+                var swallow = ProcessChord(_toggleState, info.VkCode, isDown, isUp);
+                swallow |= ProcessChord(_pttState, info.VkCode, isDown, isUp);
+                if (swallow)
                 {
-                    _mainKeyDown = false;
-                    RaiseAsync(PushToTalkReleased);
                     return 1;
                 }
             }
@@ -229,12 +174,90 @@ public sealed class HotkeyService : IHotkeyService
         return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
     }
 
+    /// <summary>
+    /// Advances one chord's state for the current key event and returns whether the event should
+    /// be swallowed (kept from the focused application).
+    /// </summary>
+    private bool ProcessChord(ChordState? state, uint vkCode, bool isDown, bool isUp)
+    {
+        if (state is null)
+        {
+            return false;
+        }
+
+        var chord = state.Chord;
+
+        // Track the main key's up/down state for main-key chords.
+        if (chord.VirtualKey is { } mainKey && vkCode == mainKey)
+        {
+            if (isDown)
+            {
+                state.MainKeyDown = true;
+            }
+            else if (isUp)
+            {
+                state.MainKeyDown = false;
+            }
+        }
+
+        var satisfied = IsSatisfied(state);
+
+        // Swallow only the chord's main key, so it never types into the focused app. Modifier
+        // keys are deliberately never swallowed: their key-down was already delivered before the
+        // chord completed, so swallowing the matching key-up would leave a stuck modifier.
+        // Modifier-only chords therefore pass through (best-effort — see class remarks).
+        var swallow = !chord.IsModifierOnly && chord.VirtualKey == vkCode;
+
+        if (satisfied && !state.Active)
+        {
+            state.Active = true;
+            Raise(state, pressed: true);
+            return swallow;
+        }
+
+        if (!satisfied && state.Active)
+        {
+            state.Active = false;
+            Raise(state, pressed: false);
+            return swallow;
+        }
+
+        // While engaged, swallow the main key's auto-repeat so it does not type.
+        return state.Active && swallow;
+    }
+
+    private bool IsSatisfied(ChordState state)
+    {
+        var chord = state.Chord;
+        if (chord.IsModifierOnly)
+        {
+            // Exact match so extra modifiers do not fire a modifier-only chord.
+            return HotkeyMatcher.ModifiersSatisfied(chord, _pressedModifierKeys, exact: true);
+        }
+
+        return state.MainKeyDown
+            && HotkeyMatcher.ModifiersSatisfied(chord, _pressedModifierKeys, exact: false);
+    }
+
+    private void Raise(ChordState state, bool pressed)
+    {
+        if (state.IsToggle)
+        {
+            // Toggle fires only on the rising edge; there is no release event.
+            if (pressed)
+            {
+                RaiseAsync(TogglePressed);
+            }
+
+            return;
+        }
+
+        RaiseAsync(pressed ? PushToTalkPressed : PushToTalkReleased);
+    }
+
     private void UpdateModifierState(uint vkCode, bool isDown)
     {
-        // The LL hook reports left/right-specific codes: LSHIFT/RSHIFT (A0/A1),
-        // LCTRL/RCTRL (A2/A3), LALT/RALT (A4/A5), LWIN/RWIN (5B/5C).
-        var isModifier = vkCode is >= 0xA0 and <= 0xA5 or 0x5B or 0x5C;
-        if (!isModifier)
+        if (!HotkeyMatcher.IsModifierKey(vkCode))
         {
             return;
         }
@@ -247,24 +270,6 @@ public sealed class HotkeyService : IHotkeyService
         {
             _pressedModifierKeys.Remove(vkCode);
         }
-    }
-
-    private HotkeyModifiers PressedModifiers()
-    {
-        var modifiers = HotkeyModifiers.None;
-        foreach (var vk in _pressedModifierKeys)
-        {
-            modifiers |= vk switch
-            {
-                0xA0 or 0xA1 => HotkeyModifiers.Shift,
-                0xA2 or 0xA3 => HotkeyModifiers.Control,
-                0xA4 or 0xA5 => HotkeyModifiers.Alt,
-                0x5B or 0x5C => HotkeyModifiers.Windows,
-                _ => HotkeyModifiers.None,
-            };
-        }
-
-        return modifiers;
     }
 
     /// <summary>
@@ -299,5 +304,21 @@ public sealed class HotkeyService : IHotkeyService
         {
             _logger.LogDebug(ex, "Could not show hotkey warning notification");
         }
+    }
+
+    /// <summary>Per-chord runtime state tracked across key events.</summary>
+    private sealed class ChordState(HotkeyChord chord, bool isToggle)
+    {
+        /// <summary>Gets the chord being watched.</summary>
+        public HotkeyChord Chord { get; } = chord;
+
+        /// <summary>Gets a value indicating whether this is the toggle chord (fires once on press) rather than push-to-talk.</summary>
+        public bool IsToggle { get; } = isToggle;
+
+        /// <summary>Gets or sets a value indicating whether the chord's main key is currently held (main-key chords only).</summary>
+        public bool MainKeyDown { get; set; }
+
+        /// <summary>Gets or sets a value indicating whether the chord is currently engaged (fired, awaiting release).</summary>
+        public bool Active { get; set; }
     }
 }

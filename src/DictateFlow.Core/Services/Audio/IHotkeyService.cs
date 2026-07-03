@@ -4,9 +4,9 @@ namespace DictateFlow.Core.Services.Audio;
 
 /// <summary>
 /// Listens for the global dictation hotkeys. The push-to-talk and toggle hotkeys are
-/// independent and both active at once: toggle uses <c>RegisterHotKey</c>, push-to-talk uses a
-/// low-level keyboard hook (it needs key-up notifications). Either can be disabled by leaving
-/// its hotkey empty.
+/// independent and both active at once; both are watched through a single low-level keyboard
+/// hook (it reports key-up and left/right-specific modifiers). Either can be disabled by
+/// leaving its hotkey empty.
 /// </summary>
 public interface IHotkeyService : IDisposable
 {

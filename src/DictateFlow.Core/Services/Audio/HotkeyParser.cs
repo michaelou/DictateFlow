@@ -3,22 +3,43 @@ using DictateFlow.Core.Models;
 namespace DictateFlow.Core.Services.Audio;
 
 /// <summary>
-/// Converts between the <c>"Ctrl+Alt+D"</c> hotkey string format used in settings and
-/// <see cref="HotkeyChord"/> (modifier flags + Win32 virtual-key code). Parsing is
-/// case-insensitive and tolerates whitespace around the <c>+</c> separators.
+/// Converts between the hotkey string format used in settings and <see cref="HotkeyChord"/>
+/// (modifier requirements + an optional Win32 virtual-key code). Supports side-agnostic
+/// modifiers (<c>Ctrl+Alt+D</c>), side-specific modifiers (<c>RCtrl+RShift</c>), and
+/// modifier-only chords of two or more keys (<c>Ctrl+Win</c>). A lone single modifier is not a
+/// valid chord. Parsing is case-insensitive and tolerates whitespace around the <c>+</c>
+/// separators.
 /// </summary>
 public static class HotkeyParser
 {
-    private static readonly Dictionary<string, HotkeyModifiers> ModifierNames = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Modifier token → (kind, side). The first token registered per (kind, side) is canonical.</summary>
+    private static readonly Dictionary<string, HotkeyModifier> ModifierNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Ctrl"] = HotkeyModifiers.Control,
-        ["Control"] = HotkeyModifiers.Control,
-        ["Alt"] = HotkeyModifiers.Alt,
-        ["Shift"] = HotkeyModifiers.Shift,
-        ["Win"] = HotkeyModifiers.Windows,
-        ["Windows"] = HotkeyModifiers.Windows,
-        ["Meta"] = HotkeyModifiers.Windows,
-        ["Super"] = HotkeyModifiers.Windows,
+        ["Ctrl"] = new(HotkeyModifiers.Control, ModifierSide.Any),
+        ["Control"] = new(HotkeyModifiers.Control, ModifierSide.Any),
+        ["Alt"] = new(HotkeyModifiers.Alt, ModifierSide.Any),
+        ["Shift"] = new(HotkeyModifiers.Shift, ModifierSide.Any),
+        ["Win"] = new(HotkeyModifiers.Windows, ModifierSide.Any),
+        ["Windows"] = new(HotkeyModifiers.Windows, ModifierSide.Any),
+        ["Meta"] = new(HotkeyModifiers.Windows, ModifierSide.Any),
+        ["Super"] = new(HotkeyModifiers.Windows, ModifierSide.Any),
+
+        ["LCtrl"] = new(HotkeyModifiers.Control, ModifierSide.Left),
+        ["LeftCtrl"] = new(HotkeyModifiers.Control, ModifierSide.Left),
+        ["RCtrl"] = new(HotkeyModifiers.Control, ModifierSide.Right),
+        ["RightCtrl"] = new(HotkeyModifiers.Control, ModifierSide.Right),
+        ["LAlt"] = new(HotkeyModifiers.Alt, ModifierSide.Left),
+        ["LeftAlt"] = new(HotkeyModifiers.Alt, ModifierSide.Left),
+        ["RAlt"] = new(HotkeyModifiers.Alt, ModifierSide.Right),
+        ["RightAlt"] = new(HotkeyModifiers.Alt, ModifierSide.Right),
+        ["LShift"] = new(HotkeyModifiers.Shift, ModifierSide.Left),
+        ["LeftShift"] = new(HotkeyModifiers.Shift, ModifierSide.Left),
+        ["RShift"] = new(HotkeyModifiers.Shift, ModifierSide.Right),
+        ["RightShift"] = new(HotkeyModifiers.Shift, ModifierSide.Right),
+        ["LWin"] = new(HotkeyModifiers.Windows, ModifierSide.Left),
+        ["LeftWin"] = new(HotkeyModifiers.Windows, ModifierSide.Left),
+        ["RWin"] = new(HotkeyModifiers.Windows, ModifierSide.Right),
+        ["RightWin"] = new(HotkeyModifiers.Windows, ModifierSide.Right),
     };
 
     /// <summary>Key name → virtual-key code. The first name registered per code is canonical.</summary>
@@ -27,16 +48,16 @@ public static class HotkeyParser
     /// <summary>Virtual-key code → canonical key name, derived from <see cref="KeyNames"/>.</summary>
     private static readonly Dictionary<uint, string> CanonicalNames = BuildCanonicalNames();
 
-    /// <summary>Parses a hotkey string such as <c>"Ctrl+Alt+D"</c>.</summary>
+    /// <summary>Parses a hotkey string such as <c>"Ctrl+Alt+D"</c> or <c>"RCtrl+RShift"</c>.</summary>
     /// <param name="text">The hotkey string.</param>
     /// <returns>The parsed chord.</returns>
     /// <exception cref="FormatException"><paramref name="text"/> is not a valid hotkey.</exception>
     public static HotkeyChord Parse(string text)
         => TryParse(text, out var chord)
             ? chord
-            : throw new FormatException($"'{text}' is not a valid hotkey. Expected e.g. 'Ctrl+Alt+D'.");
+            : throw new FormatException($"'{text}' is not a valid hotkey. Expected e.g. 'Ctrl+Alt+D', 'RCtrl+RShift' or 'Ctrl+Win'.");
 
-    /// <summary>Attempts to parse a hotkey string such as <c>"Ctrl+Alt+D"</c>.</summary>
+    /// <summary>Attempts to parse a hotkey string such as <c>"Ctrl+Alt+D"</c> or <c>"RCtrl+RShift"</c>.</summary>
     /// <param name="text">The hotkey string.</param>
     /// <param name="chord">The parsed chord on success.</param>
     /// <returns><see langword="true"/> when <paramref name="text"/> is a valid hotkey.</returns>
@@ -48,8 +69,8 @@ public static class HotkeyParser
             return false;
         }
 
-        var modifiers = HotkeyModifiers.None;
-        uint virtualKey = 0;
+        var modifiers = new List<HotkeyModifier>();
+        uint? virtualKey = null;
         string? keyName = null;
 
         var parts = text.Split('+');
@@ -63,46 +84,68 @@ public static class HotkeyParser
 
             if (ModifierNames.TryGetValue(part, out var modifier))
             {
-                modifiers |= modifier;
+                if (!modifiers.Contains(modifier))
+                {
+                    modifiers.Add(modifier);
+                }
+
                 continue;
             }
 
             // The main key must be the last (non-modifier) token — at most one is allowed.
-            if (keyName is not null || i != parts.Length - 1 || !KeyNames.TryGetValue(part, out virtualKey))
+            if (keyName is not null || i != parts.Length - 1 || !KeyNames.TryGetValue(part, out var vk))
             {
                 return false;
             }
 
-            keyName = CanonicalNames[virtualKey];
+            virtualKey = vk;
+            keyName = CanonicalNames[vk];
         }
 
-        if (keyName is null)
-        {
-            return false;
-        }
-
-        chord = new HotkeyChord(modifiers, virtualKey, keyName);
-        return true;
+        return TryBuild(modifiers, virtualKey, keyName, out chord);
     }
 
     /// <summary>
-    /// Builds a chord from raw modifier flags and a virtual-key code — used by the settings
-    /// hotkey-capture textbox, which receives key events rather than strings.
+    /// Builds a chord from a captured set of modifier requirements and an optional main key —
+    /// used by the settings hotkey-capture textbox, which receives key events rather than strings.
     /// </summary>
-    /// <param name="modifiers">The modifier flags held down.</param>
-    /// <param name="virtualKey">The virtual-key code of the main key.</param>
+    /// <param name="modifiers">The modifier requirements held down (side-specific).</param>
+    /// <param name="virtualKey">The virtual-key code of the main key, or <see langword="null"/> for a modifier-only chord.</param>
     /// <param name="chord">The chord with its canonical key name on success.</param>
-    /// <returns><see langword="false"/> when <paramref name="virtualKey"/> is not a supported main key.</returns>
-    public static bool TryFromVirtualKey(HotkeyModifiers modifiers, uint virtualKey, out HotkeyChord chord)
+    /// <returns><see langword="false"/> when the capture does not form a valid chord.</returns>
+    public static bool TryFromCapture(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey, out HotkeyChord chord)
     {
-        if (CanonicalNames.TryGetValue(virtualKey, out var name))
+        string? keyName = null;
+        if (virtualKey is { } vk)
         {
-            chord = new HotkeyChord(modifiers, virtualKey, name);
-            return true;
+            if (!CanonicalNames.TryGetValue(vk, out keyName))
+            {
+                chord = null!;
+                return false;
+            }
         }
 
-        chord = null!;
-        return false;
+        return TryBuild([.. modifiers], virtualKey, keyName, out chord);
+    }
+
+    /// <summary>
+    /// Validates the chord invariant and constructs it: a main-key chord (any modifiers plus a
+    /// main key) or a modifier-only chord (two or more distinct modifiers, no main key). A lone
+    /// single modifier is rejected.
+    /// </summary>
+    private static bool TryBuild(List<HotkeyModifier> modifiers, uint? virtualKey, string? keyName, out HotkeyChord chord)
+    {
+        var distinct = modifiers.Distinct().ToList();
+
+        // Modifier-only chords need at least two keys; a lone modifier is not a hotkey.
+        if (virtualKey is null && distinct.Count < 2)
+        {
+            chord = null!;
+            return false;
+        }
+
+        chord = new HotkeyChord(distinct, virtualKey, keyName);
+        return true;
     }
 
     private static Dictionary<string, uint> BuildKeyNames()

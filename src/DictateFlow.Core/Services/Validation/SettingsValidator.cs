@@ -90,7 +90,7 @@ public sealed class SettingsValidator : ISettingsValidator
             return chord;
         }
 
-        findings.Add(Error("General", $"'{hotkey}' is not a valid {label} hotkey (expected e.g. Ctrl+Alt+D)."));
+        findings.Add(Error("General", $"'{hotkey}' is not a valid {label} hotkey (expected e.g. Ctrl+Alt+D, RCtrl+RShift or Ctrl+Win)."));
         return null;
     }
 

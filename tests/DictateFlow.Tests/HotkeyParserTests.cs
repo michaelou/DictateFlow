@@ -11,9 +11,10 @@ public sealed class HotkeyParserTests
     {
         var chord = HotkeyParser.Parse("Ctrl+Alt+D");
 
-        Assert.Equal(HotkeyModifiers.Control | HotkeyModifiers.Alt, chord.Modifiers);
+        Assert.Equal("Ctrl+Alt+D", chord.ToString());
         Assert.Equal(0x44u, chord.VirtualKey); // VK_D
         Assert.Equal("D", chord.KeyName);
+        Assert.False(chord.IsModifierOnly);
     }
 
     [Theory]
@@ -24,22 +25,48 @@ public sealed class HotkeyParserTests
     {
         var chord = HotkeyParser.Parse(text);
 
-        Assert.Equal(HotkeyModifiers.Control | HotkeyModifiers.Alt, chord.Modifiers);
+        Assert.Equal("Ctrl+Alt+D", chord.ToString());
         Assert.Equal(0x44u, chord.VirtualKey);
     }
 
     [Theory]
-    [InlineData("F12", HotkeyModifiers.None, 0x7Bu)]
-    [InlineData("Shift+Space", HotkeyModifiers.Shift, 0x20u)]
-    [InlineData("Win+Enter", HotkeyModifiers.Windows, 0x0Du)]
-    [InlineData("Ctrl+Shift+NumPad5", HotkeyModifiers.Control | HotkeyModifiers.Shift, 0x65u)]
-    [InlineData("Alt+OemTilde", HotkeyModifiers.Alt, 0xC0u)]
-    public void Parse_SupportsCommonKeys(string text, HotkeyModifiers expectedModifiers, uint expectedVirtualKey)
+    [InlineData("F12", "F12", 0x7Bu)]
+    [InlineData("Shift+Space", "Shift+Space", 0x20u)]
+    [InlineData("Win+Enter", "Win+Enter", 0x0Du)]
+    [InlineData("Ctrl+Shift+NumPad5", "Ctrl+Shift+NumPad5", 0x65u)]
+    [InlineData("Alt+OemTilde", "Alt+OemTilde", 0xC0u)]
+    public void Parse_SupportsCommonKeys(string text, string expectedCanonical, uint expectedVirtualKey)
     {
         var chord = HotkeyParser.Parse(text);
 
-        Assert.Equal(expectedModifiers, chord.Modifiers);
+        Assert.Equal(expectedCanonical, chord.ToString());
         Assert.Equal(expectedVirtualKey, chord.VirtualKey);
+    }
+
+    [Theory]
+    [InlineData("RCtrl+RShift")]
+    [InlineData("Ctrl+Win")]
+    [InlineData("LCtrl+RShift")]
+    [InlineData("Ctrl+Alt+Shift+Win")]
+    public void Parse_ModifierOnlyChords_HaveNoMainKey(string text)
+    {
+        var chord = HotkeyParser.Parse(text);
+
+        Assert.True(chord.IsModifierOnly);
+        Assert.Null(chord.VirtualKey);
+        Assert.Null(chord.KeyName);
+        Assert.Equal(text, chord.ToString());
+    }
+
+    [Fact]
+    public void Parse_SideSpecificModifierWithMainKey_ReturnsExpectedChord()
+    {
+        var chord = HotkeyParser.Parse("LCtrl+Shift+D");
+
+        Assert.Equal("LCtrl+Shift+D", chord.ToString());
+        Assert.Equal(0x44u, chord.VirtualKey);
+        Assert.Contains(new HotkeyModifier(HotkeyModifiers.Control, ModifierSide.Left), chord.Modifiers);
+        Assert.Contains(new HotkeyModifier(HotkeyModifiers.Shift, ModifierSide.Any), chord.Modifiers);
     }
 
     [Theory]
@@ -47,7 +74,8 @@ public sealed class HotkeyParserTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Ctrl+")]
-    [InlineData("Ctrl+Alt")]           // no main key
+    [InlineData("Ctrl")]                // lone modifier
+    [InlineData("RCtrl")]              // lone side-specific modifier
     [InlineData("Ctrl+NotAKey")]
     [InlineData("Foo+D")]
     [InlineData("Ctrl+D+F")]           // two main keys
@@ -61,7 +89,7 @@ public sealed class HotkeyParserTests
     [Fact]
     public void Parse_InvalidInput_ThrowsFormatException()
     {
-        Assert.Throws<FormatException>(() => HotkeyParser.Parse("Ctrl+Alt"));
+        Assert.Throws<FormatException>(() => HotkeyParser.Parse("Ctrl"));
     }
 
     [Theory]
@@ -69,6 +97,9 @@ public sealed class HotkeyParserTests
     [InlineData("Ctrl+Alt+Shift+Win+F12")]
     [InlineData("Space")]
     [InlineData("Shift+OemComma")]
+    [InlineData("RCtrl+RShift")]
+    [InlineData("Ctrl+Win")]
+    [InlineData("LCtrl+Shift+D")]
     public void ToString_RoundTripsCanonicalStrings(string text)
     {
         var chord = HotkeyParser.Parse(text);
@@ -94,17 +125,48 @@ public sealed class HotkeyParserTests
     }
 
     [Fact]
-    public void TryFromVirtualKey_KnownKey_ProducesCanonicalChord()
+    public void TryFromCapture_KnownKey_ProducesCanonicalChord()
     {
-        var found = HotkeyParser.TryFromVirtualKey(HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x44, out var chord);
+        var modifiers = new[]
+        {
+            new HotkeyModifier(HotkeyModifiers.Control, ModifierSide.Any),
+            new HotkeyModifier(HotkeyModifiers.Alt, ModifierSide.Any),
+        };
+
+        var found = HotkeyParser.TryFromCapture(modifiers, 0x44, out var chord);
 
         Assert.True(found);
         Assert.Equal("Ctrl+Alt+D", chord.ToString());
     }
 
     [Fact]
-    public void TryFromVirtualKey_UnknownKey_ReturnsFalse()
+    public void TryFromCapture_ModifierOnly_ProducesCanonicalChord()
     {
-        Assert.False(HotkeyParser.TryFromVirtualKey(HotkeyModifiers.Control, 0xFF, out _));
+        var modifiers = new[]
+        {
+            new HotkeyModifier(HotkeyModifiers.Control, ModifierSide.Right),
+            new HotkeyModifier(HotkeyModifiers.Shift, ModifierSide.Right),
+        };
+
+        var found = HotkeyParser.TryFromCapture(modifiers, null, out var chord);
+
+        Assert.True(found);
+        Assert.Equal("RCtrl+RShift", chord.ToString());
+    }
+
+    [Fact]
+    public void TryFromCapture_SingleModifierNoMainKey_ReturnsFalse()
+    {
+        var modifiers = new[] { new HotkeyModifier(HotkeyModifiers.Control, ModifierSide.Right) };
+
+        Assert.False(HotkeyParser.TryFromCapture(modifiers, null, out _));
+    }
+
+    [Fact]
+    public void TryFromCapture_UnknownKey_ReturnsFalse()
+    {
+        var modifiers = new[] { new HotkeyModifier(HotkeyModifiers.Control, ModifierSide.Any) };
+
+        Assert.False(HotkeyParser.TryFromCapture(modifiers, 0xFF, out _));
     }
 }
