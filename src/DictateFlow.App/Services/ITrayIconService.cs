@@ -21,5 +21,12 @@ public interface ITrayIconService : IDisposable
     /// <summary>Shows a non-blocking warning balloon/toast from the tray icon.</summary>
     /// <param name="title">The notification title.</param>
     /// <param name="message">The notification body.</param>
-    void ShowWarningNotification(string title, string message);
+    /// <param name="onClick"><inheritdoc cref="ShowErrorNotification" path="/param[@name='onClick']"/></param>
+    void ShowWarningNotification(string title, string message, Action? onClick = null);
+
+    /// <summary>Shows a non-blocking informational balloon/toast from the tray icon.</summary>
+    /// <param name="title">The notification title.</param>
+    /// <param name="message">The notification body.</param>
+    /// <param name="onClick"><inheritdoc cref="ShowErrorNotification" path="/param[@name='onClick']"/></param>
+    void ShowInfoNotification(string title, string message, Action? onClick = null);
 }

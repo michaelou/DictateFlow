@@ -14,6 +14,9 @@ namespace DictateFlow.Core.Models;
 /// </summary>
 public sealed class AppSettings
 {
+    /// <summary>Gets or sets the general application behavior configuration (consumed in M8).</summary>
+    public GeneralSettings General { get; set; } = new();
+
     /// <summary>Gets or sets the audio recording configuration (consumed in M2).</summary>
     public RecordingSettings Recording { get; set; } = new();
 
@@ -47,6 +50,38 @@ public sealed class AppSettings
     /// no match falls back to <see cref="ActivePromptMode"/>.
     /// </summary>
     public List<ApplicationRule> ApplicationRules { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the remembered size and position of each application window (consumed in
+    /// M8), keyed by a stable window name (e.g. <c>Settings</c>, <c>History</c>).
+    /// </summary>
+    public Dictionary<string, WindowPlacement> WindowState { get; set; } = [];
+}
+
+/// <summary>General application behavior settings.</summary>
+public sealed class GeneralSettings
+{
+    /// <summary>Gets or sets a value indicating whether DictateFlow starts with Windows (HKCU Run key).</summary>
+    public bool LaunchAtStartup { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the one-time first-run welcome has been shown.</summary>
+    public bool FirstRunCompleted { get; set; }
+}
+
+/// <summary>The remembered placement of one application window, in device-independent pixels.</summary>
+public sealed class WindowPlacement
+{
+    /// <summary>Gets or sets the distance from the left edge of the virtual screen.</summary>
+    public double Left { get; set; }
+
+    /// <summary>Gets or sets the distance from the top edge of the virtual screen.</summary>
+    public double Top { get; set; }
+
+    /// <summary>Gets or sets the window width.</summary>
+    public double Width { get; set; }
+
+    /// <summary>Gets or sets the window height.</summary>
+    public double Height { get; set; }
 }
 
 /// <summary>
@@ -135,7 +170,7 @@ public sealed class HistorySettings
 
     /// <summary>
     /// Gets or sets the maximum number of history entries kept; the oldest entries are pruned
-    /// on insert once the cap is exceeded. Zero or negative disables pruning.
+    /// on insert once the cap is exceeded. Settings validation requires at least 1.
     /// </summary>
     public int MaxEntries { get; set; } = 1000;
 }

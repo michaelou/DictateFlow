@@ -4,6 +4,7 @@
         xmlns:controls="clr-namespace:DictateFlow.App.Controls"
         Title="DictateFlow Settings"
         Background="{DynamicResource WindowBackgroundBrush}"
+        Title="DictateFlow — Settings"
         Width="640"
         Height="440"
         MinWidth="480"
@@ -91,9 +92,14 @@
                               ItemsSource="{Binding LogLevels}"
                               SelectedItem="{Binding SelectedLogLevel}" />
                     <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                    <TextBlock Margin="0,16,0,4" FontSize="15" FontWeight="SemiBold" Text="Startup" />
+                    <CheckBox Margin="0,4,0,0"
+                              Content="_Launch DictateFlow when Windows starts"
+                              IsChecked="{Binding LaunchAtStartup}" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
-                               Text="Debug writes per-dictation latency details to the log files. Takes effect after a restart." />
+                               Text="Adds a per-user entry under the Windows Run registry key. Applied when you Save." />
 
                     <TextBlock Margin="0,12,0,0"
                                Foreground="{StaticResource ErrorBrush}"
@@ -616,7 +622,7 @@
                     <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
-                               Text="Oldest entries are removed once the cap is exceeded. 0 keeps everything." />
+                               Text="Oldest entries are removed once the cap is exceeded. Must be at least 1." />
 
                     <TextBlock Margin="0,12,0,0"
                                Foreground="{StaticResource ErrorBrush}"
@@ -671,6 +677,174 @@
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
                 </StackPanel>
+
+                <!-- Backup (import/export) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Backup">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Backup" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Move your configuration between machines. API keys are excluded from settings exports unless you opt in; imports are validated and confirmed before they apply." />
+
+                    <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Settings" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Width="140"
+                                Content="Export settings…"
+                                Command="{Binding ExportSettingsCommand}" />
+                        <Button Width="140"
+                                Margin="8,0,0,0"
+                                Content="Import settings…"
+                                Command="{Binding ImportSettingsCommand}" />
+                    </StackPanel>
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Text="Import understands current and older (pre-M7) settings files. The imported settings apply immediately — no restart needed." />
+
+                    <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Prompts" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Width="140"
+                                Content="Export prompts…"
+                                Command="{Binding ExportPromptsCommand}" />
+                        <Button Width="140"
+                                Margin="8,0,0,0"
+                                Content="Import prompts…"
+                                Command="{Binding ImportPromptsCommand}" />
+                    </StackPanel>
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Text="Exports the prompts folder as a .zip; import asks before overwriting existing files." />
+
+                    <TextBlock Margin="0,16,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding BackupStatus}" />
+                </StackPanel>
+
+                <!-- Diagnostics page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Diagnostics">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Diagnostics" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="About" />
+                    <TextBlock Text="{Binding AppVersion, StringFormat=DictateFlow {0}}" />
+                    <TextBlock Text="{Binding RuntimeVersion}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Data locations" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Margin="0,0,8,4"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding SettingsFilePath}"
+                                   Text="{Binding SettingsFilePath}" />
+                        <Button Grid.Row="0" Grid.Column="1"
+                                Width="88"
+                                Margin="0,0,0,4"
+                                Content="Open folder"
+                                Command="{Binding OpenFolderCommand}"
+                                CommandParameter="{Binding RootDirectory}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                   Margin="0,0,8,4"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding LogsDirectory}"
+                                   Text="{Binding LogsDirectory}" />
+                        <Button Grid.Row="1" Grid.Column="1"
+                                Width="88"
+                                Margin="0,0,0,4"
+                                Content="Open folder"
+                                Command="{Binding OpenFolderCommand}"
+                                CommandParameter="{Binding LogsDirectory}" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Margin="0,0,8,4"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding PromptsDirectoryPath}"
+                                   Text="{Binding PromptsDirectoryPath}" />
+                        <Button Grid.Row="2" Grid.Column="1"
+                                Width="88"
+                                Margin="0,0,0,4"
+                                Content="Open folder"
+                                Command="{Binding OpenFolderCommand}"
+                                CommandParameter="{Binding PromptsDirectoryPath}" />
+                    </Grid>
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Log level" />
+                    <ComboBox Width="160"
+                              HorizontalAlignment="Left"
+                              ItemsSource="{Binding LogLevels}"
+                              SelectedItem="{Binding SelectedLogLevel}" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Debug writes per-dictation latency details. Saved with Save; takes effect after a restart." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Recent log (last 100 lines)" />
+                    <Button Width="88"
+                            HorizontalAlignment="Left"
+                            Content="Refresh"
+                            Command="{Binding RefreshLogTailCommand}" />
+                    <TextBox Height="140"
+                             Margin="0,8,0,0"
+                             AcceptsReturn="True"
+                             IsReadOnly="True"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             TextWrapping="NoWrap"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding LogTail, Mode=OneWay}" />
+
+                    <Button Width="140"
+                            Margin="0,12,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Copy diagnostics"
+                            Command="{Binding CopyDiagnosticsCommand}" />
+                    <TextBlock Margin="0,8,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding DiagnosticsStatus}" />
+                </StackPanel>
             </Grid>
             </ScrollViewer>
         </Border>
@@ -683,11 +857,11 @@
                     Orientation="Horizontal">
             <Button Width="88"
                     Margin="0,0,8,0"
-                    Content="Save"
+                    Content="_Save"
                     IsDefault="True"
                     Command="{Binding SaveCommand}" />
             <Button Width="88"
-                    Content="Cancel"
+                    Content="_Cancel"
                     IsCancel="True"
                     Command="{Binding CancelCommand}" />
         </StackPanel>

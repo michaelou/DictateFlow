@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="DictateFlow Cost Dashboard"
         Background="{DynamicResource WindowBackgroundBrush}"
+        Title="DictateFlow — Cost Dashboard"
         Width="720"
         Height="380"
         MinWidth="560"

@@ -51,7 +51,7 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     public void Hide() => OnUiThread(() =>
     {
         _viewModel.State = OverlayState.Hidden;
-        _window?.Hide();
+        _window?.FadeOut();
     });
 
     /// <inheritdoc />
@@ -66,7 +66,7 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     {
         _window ??= new OverlayWindow { DataContext = _viewModel };
         _viewModel.State = state;
-        _window.Show();
+        _window.FadeIn();
     }
 
     /// <summary>

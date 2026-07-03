@@ -74,6 +74,39 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
+    /// <summary><c>MonitorFromWindow</c> flag: return the monitor nearest to the window.</summary>
+    public const uint MonitorDefaultToNearest = 2;
+
+    /// <summary>Managed mirror of <c>RECT</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    /// <summary>Managed mirror of <c>MONITORINFO</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect Work;
+        public uint Flags;
+
+        /// <summary>Creates an instance with <see cref="Size"/> initialized as the API requires.</summary>
+        public static MonitorInfo Create() => new() { Size = Marshal.SizeOf<MonitorInfo>() };
+    }
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 

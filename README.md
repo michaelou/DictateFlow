@@ -10,7 +10,7 @@ All providers (speech, LLM, output) are replaceable via interfaces registered in
 
 ## Status
 
-**M7: Extensibility** — the full dictation loop works end to end: global hotkey recording (M2), Azure AI Foundry transcription (M3), prompt-mode LLM enhancement (M4), automatic paste / preview output with history writes (M5), history window / cost dashboard / dictionary / app rules / diagnostics (M6), and a named provider registry (M7): every speech, LLM and output provider is registered by name, selected purely through settings (`ActiveProviders` + per-provider `Providers` sections, with automatic migration of pre-M7 settings files), and switchable at runtime from dropdowns in Settings. Adding a provider is one class + one DI registration line — see [docs/extensibility.md](docs/extensibility.md). Next: import/export & startup polish (M8).
+**M8: Polish** — feature-complete V1, hardened for daily use: global hotkey recording (M2), Azure AI Foundry transcription (M3), prompt-mode LLM enhancement (M4), automatic paste / preview output with history writes (M5), history window / cost dashboard / dictionary / app rules (M6), a named provider registry (M7, see [docs/extensibility.md](docs/extensibility.md)), and production polish (M8): settings validation with inline errors and a startup mock-provider fallback, settings import/export (API keys excluded unless opted in) and prompts zip import/export, launch-with-Windows with stale-path reconciliation, sub-2-second tray startup with deferred initialization and a first-run welcome, window-state persistence, an overlay that fades and follows the focused monitor, and a Diagnostics settings page with a log viewer and secrets-redacted copyable report.
 
 ## Requirements
 
@@ -32,7 +32,7 @@ dotnet run --project src/DictateFlow.App
 The app starts with no window and puts a **DictateFlow icon in the system tray**. Right-click it for the menu:
 
 - **Dictate** — starts/stops a dictation (also available on the global hotkey, default `Ctrl+Alt+D`)
-- **Settings** — recording, providers, prompts, dictionary, application rules, output, history and pricing
+- **Settings** — recording, providers, prompts, dictionary, application rules, output, history, pricing, backup (import/export) and diagnostics
 - **History** — searchable list of past dictations (copy, delete, clear all)
 - **Cost Dashboard** — estimated speech/LLM costs for today, this month and lifetime
 - **Exit** — shuts the app down cleanly

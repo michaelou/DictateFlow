@@ -1,14 +1,22 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
+using System.Text.Json;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DictateFlow.App.Services;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Diagnostics;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Providers;
+using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Transfer;
+using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.Logging;
 
@@ -50,10 +58,19 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IPromptModeStore _promptModeStore;
     private readonly IPromptResolver _promptResolver;
     private readonly IAppPaths _appPaths;
+    private readonly ISettingsValidator _validator;
+    private readonly IStartupRegistration _startupRegistration;
+    private readonly ISettingsTransfer _settingsTransfer;
+    private readonly IPromptsArchive _promptsArchive;
+    private readonly IDiagnosticsService _diagnosticsService;
+    private readonly IDialogService _dialogService;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isPushToTalk;
     private bool _isAutomaticOutput;
+
+    /// <summary>The warning text already shown once; pressing Save again with the same warnings closes the window.</summary>
+    private string? _acknowledgedWarnings;
 
     /// <summary>Initializes a new instance of the <see cref="SettingsViewModel"/> class.</summary>
     /// <param name="settingsService">Persists and reloads application settings.</param>
@@ -62,7 +79,13 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="configReader">Reads and writes the per-provider config sections.</param>
     /// <param name="promptModeStore">Supplies the prompt modes; reloaded when this window opens.</param>
     /// <param name="promptResolver">Resolves prompt variables for the Prompt Tester.</param>
-    /// <param name="appPaths">Supplies the prompts folder for the "Open prompts folder" button.</param>
+    /// <param name="appPaths">Supplies the data folders shown on the Diagnostics page.</param>
+    /// <param name="validator">Validates the edited settings on Save and on import.</param>
+    /// <param name="startupRegistration">Creates/removes the launch-with-Windows Run entry.</param>
+    /// <param name="settingsTransfer">Exports and parses settings files.</param>
+    /// <param name="promptsArchive">Exports and imports the prompts folder as a zip.</param>
+    /// <param name="diagnosticsService">Supplies versions, the log tail and the copyable report.</param>
+    /// <param name="dialogService">File pickers and confirmation prompts.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public SettingsViewModel(
         ISettingsService settingsService,
@@ -72,6 +95,12 @@ public partial class SettingsViewModel : ObservableObject
         IPromptModeStore promptModeStore,
         IPromptResolver promptResolver,
         IAppPaths appPaths,
+        ISettingsValidator validator,
+        IStartupRegistration startupRegistration,
+        ISettingsTransfer settingsTransfer,
+        IPromptsArchive promptsArchive,
+        IDiagnosticsService diagnosticsService,
+        IDialogService dialogService,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
@@ -80,6 +109,12 @@ public partial class SettingsViewModel : ObservableObject
         _promptModeStore = promptModeStore;
         _promptResolver = promptResolver;
         _appPaths = appPaths;
+        _validator = validator;
+        _startupRegistration = startupRegistration;
+        _settingsTransfer = settingsTransfer;
+        _promptsArchive = promptsArchive;
+        _diagnosticsService = diagnosticsService;
+        _dialogService = dialogService;
         _logger = logger;
 
         var options = new List<MicrophoneOption> { new(null, "System default") };
@@ -153,11 +188,13 @@ public partial class SettingsViewModel : ObservableObject
         _selectedLogLevel = LogLevels.FirstOrDefault(
             l => string.Equals(l, _settingsService.Current.Logging.MinimumLevel, StringComparison.OrdinalIgnoreCase))
             ?? "Information";
+
+        _launchAtStartup = _settingsService.Current.General.LaunchAtStartup;
     }
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing"];
+        ["General", "Speech", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing", "Backup", "Diagnostics"];
 
     /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
     public IReadOnlyList<string> LogLevels { get; } =
@@ -330,6 +367,43 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedLogLevel;
 
+    /// <summary>Gets or sets a value indicating whether DictateFlow starts with Windows.</summary>
+    [ObservableProperty]
+    private bool _launchAtStartup;
+
+    /// <summary>Gets or sets the status line of the last Backup-page action, if any.</summary>
+    [ObservableProperty]
+    private string? _backupStatus;
+
+    /// <summary>Gets or sets the log tail shown on the Diagnostics page.</summary>
+    [ObservableProperty]
+    private string? _logTail;
+
+    /// <summary>Gets or sets the status line of the last Diagnostics-page action, if any.</summary>
+    [ObservableProperty]
+    private string? _diagnosticsStatus;
+
+    /// <summary>Gets the application version shown on the Diagnostics page.</summary>
+    public string AppVersion => _diagnosticsService.AppVersion;
+
+    /// <summary>Gets the .NET runtime description shown on the Diagnostics page.</summary>
+    public string RuntimeVersion => _diagnosticsService.RuntimeVersion;
+
+    /// <summary>Gets the application data root (holds the settings and database files).</summary>
+    public string RootDirectory => _appPaths.RootDirectory;
+
+    /// <summary>Gets the settings file location shown on the Diagnostics page.</summary>
+    public string SettingsFilePath => _appPaths.SettingsFilePath;
+
+    /// <summary>Gets the database file location shown on the Diagnostics page.</summary>
+    public string DatabaseFilePath => _appPaths.DatabaseFilePath;
+
+    /// <summary>Gets the logs directory shown on the Diagnostics page.</summary>
+    public string LogsDirectory => _appPaths.LogsDirectory;
+
+    /// <summary>Gets the prompts directory shown on the Diagnostics page.</summary>
+    public string PromptsDirectoryPath => _appPaths.PromptsDirectory;
+
     /// <summary>Gets or sets a value indicating whether push-to-talk mode is selected.</summary>
     public bool IsPushToTalk
     {
@@ -399,78 +473,89 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Validates and persists the current settings, then closes the window.</summary>
+    /// <summary>
+    /// Applies the edits to the in-memory settings, validates them with the
+    /// <see cref="ISettingsValidator"/>, and persists. Errors block the save and navigate to
+    /// the offending page; warnings save but stay visible — pressing Save again with the
+    /// same warnings closes the window.
+    /// </summary>
     [RelayCommand]
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (!HotkeyParser.TryParse(Hotkey, out _))
-        {
-            ValidationError = $"'{Hotkey}' is not a valid hotkey (expected e.g. Ctrl+Alt+D).";
-            return;
-        }
-
-        if (SilenceTimeoutSeconds < 1)
-        {
-            ValidationError = "Silence timeout must be at least 1 second.";
-            return;
-        }
-
-        if (!IsValidOptionalEndpoint(SpeechEndpoint))
-        {
-            ValidationError = $"'{SpeechEndpoint}' is not a valid http(s) endpoint URL.";
-            return;
-        }
-
-        if (SpeechTimeoutSeconds < 1)
-        {
-            ValidationError = "Speech timeout must be at least 1 second.";
-            return;
-        }
-
-        if (!IsValidOptionalEndpoint(LlmEndpoint))
-        {
-            ValidationError = $"'{LlmEndpoint}' is not a valid http(s) endpoint URL.";
-            return;
-        }
-
-        if (LlmTemperature is < 0 or > 2)
-        {
-            ValidationError = "Temperature must be between 0 and 2.";
-            return;
-        }
-
-        if (LlmMaxTokens < 1)
-        {
-            ValidationError = "Max tokens must be at least 1.";
-            return;
-        }
-
-        if (LlmTimeoutSeconds < 1)
-        {
-            ValidationError = "LLM timeout must be at least 1 second.";
-            return;
-        }
-
+        // The mock delay fields are not covered by the validator (provider-specific).
         if (MockSpeechDelayMs < 0 || MockLlmDelayMs < 0)
         {
             ValidationError = "Mock delays cannot be negative.";
             return;
         }
 
-        if (HistoryMaxEntries < 0)
+        ApplyEditsToSettings();
+
+        var findings = _validator.Validate(_settingsService.Current);
+        var errors = findings.Where(f => f.Severity == SettingsValidationSeverity.Error).ToList();
+        if (errors.Count > 0)
         {
-            ValidationError = "History max entries cannot be negative (0 keeps everything).";
+            ValidationError = "Not saved:\n" + string.Join("\n", errors.Select(f => $"• {f.Section}: {f.Message}"));
+            if (Sections.Contains(errors[0].Section))
+            {
+                SelectedSection = errors[0].Section;
+            }
+
             return;
         }
 
-        if (PricingSpeechPerMinute < 0 || PricingLlmPromptPer1M < 0 || PricingLlmCompletionPer1M < 0)
+        var startupProblem = !ApplyStartupRegistration();
+
+        await _settingsService.SaveAsync(cancellationToken);
+        _logger.LogInformation("Settings saved from Settings window");
+
+        if (startupProblem)
         {
-            ValidationError = "Pricing rates cannot be negative.";
-            return;
+            return; // saved, but keep the window open so the registry message is seen
+        }
+
+        var warnings = findings.Where(f => f.Severity == SettingsValidationSeverity.Warning).ToList();
+        if (warnings.Count > 0)
+        {
+            var text = "Saved with warnings:\n" + string.Join("\n", warnings.Select(f => $"• {f.Section}: {f.Message}"));
+            if (!string.Equals(text, _acknowledgedWarnings, StringComparison.Ordinal))
+            {
+                _acknowledgedWarnings = text;
+                ValidationError = text;
+                return; // saved; Save again (or close) once the warnings are read
+            }
         }
 
         ValidationError = null;
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
 
+    /// <summary>
+    /// Brings the HKCU Run entry in line with the checkbox. Honest about failure: a denied
+    /// registry write unchecks the option and reports it instead of pretending it worked.
+    /// </summary>
+    /// <returns><see langword="false"/> when the registry write failed.</returns>
+    private bool ApplyStartupRegistration()
+    {
+        if (LaunchAtStartup == _startupRegistration.IsEnabled())
+        {
+            return true;
+        }
+
+        if (_startupRegistration.TrySetEnabled(LaunchAtStartup))
+        {
+            return true;
+        }
+
+        LaunchAtStartup = false;
+        _settingsService.Current.General.LaunchAtStartup = false;
+        ValidationError = "Could not update the Windows startup entry (registry access was denied). Launch at startup stays off.";
+        return false;
+    }
+
+    /// <summary>Writes every edited field into the in-memory settings (persisted by Save; Cancel reloads from disk).</summary>
+    private void ApplyEditsToSettings()
+    {
         var recording = _settingsService.Current.Recording;
         recording.Mode = IsPushToTalk ? RecordingModes.PushToTalk : RecordingModes.Toggle;
         recording.Hotkey = Hotkey;
@@ -505,10 +590,7 @@ public partial class SettingsViewModel : ObservableObject
         pricing.Currency = PricingCurrency.Trim();
 
         _settingsService.Current.Logging.MinimumLevel = SelectedLogLevel;
-
-        await _settingsService.SaveAsync(cancellationToken);
-        _logger.LogInformation("Settings saved from Settings window");
-        CloseRequested?.Invoke(this, EventArgs.Empty);
+        _settingsService.Current.General.LaunchAtStartup = LaunchAtStartup;
     }
 
     /// <summary>Discards unsaved edits by reloading settings from disk, then closes the window.</summary>
@@ -736,6 +818,199 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Exports the current settings to a JSON file chosen by the user, asking whether API
+    /// keys should be included (excluded by default — keys are exported as empty strings).
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportSettingsAsync(CancellationToken cancellationToken)
+    {
+        var path = _dialogService.ShowSaveFile(
+            "Export settings", "JSON files|*.json|All files|*.*", "dictateflow-settings.json");
+        if (path is null)
+        {
+            return;
+        }
+
+        var includeSecrets = _dialogService.Confirm(
+            "Include secrets?",
+            "Include API keys in the exported file?\n\nChoose No to export them as empty strings (recommended when sharing the file).");
+
+        try
+        {
+            var json = _settingsTransfer.ExportJson(_settingsService.Current, includeSecrets);
+            await File.WriteAllTextAsync(path, json, cancellationToken);
+            BackupStatus = includeSecrets
+                ? $"✓ Settings exported (including API keys) to {path}."
+                : $"✓ Settings exported (API keys blanked) to {path}.";
+            _logger.LogInformation("Settings exported to {Path} (secrets: {IncludeSecrets})", path, includeSecrets);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Settings export failed");
+            BackupStatus = $"✗ Export failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Imports a settings file: parses it (running the schema migrations, so pre-M7 files
+    /// work), validates it, shows the findings, and applies it after confirmation. Applying
+    /// saves and raises <c>SettingsChanged</c>, so the hotkey and providers re-apply live;
+    /// the window closes because its edit state no longer reflects the settings.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportSettingsAsync(CancellationToken cancellationToken)
+    {
+        var path = _dialogService.ShowOpenFile("Import settings", "JSON files|*.json|All files|*.*");
+        if (path is null)
+        {
+            return;
+        }
+
+        AppSettings imported;
+        try
+        {
+            imported = _settingsTransfer.ParseImport(await File.ReadAllTextAsync(path, cancellationToken));
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Settings import failed");
+            BackupStatus = $"✗ Import failed: {ex.Message}";
+            return;
+        }
+
+        var findings = _validator.Validate(imported);
+        var summary = findings.Count == 0
+            ? "The file is valid."
+            : "The file has findings:\n" + string.Join("\n", findings.Select(
+                f => $"• [{(f.Severity == SettingsValidationSeverity.Error ? "Error" : "Warning")}] {f.Section}: {f.Message}"));
+
+        if (!_dialogService.Confirm(
+            "Import settings",
+            $"{summary}\n\nReplace the current settings with this file? The window will close and the new settings apply immediately."))
+        {
+            BackupStatus = "Import cancelled.";
+            return;
+        }
+
+        await _settingsService.ReplaceAsync(imported, cancellationToken);
+        _logger.LogInformation("Settings imported from {Path} with {FindingCount} validation findings", path, findings.Count);
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Exports the prompts folder as a zip archive.</summary>
+    [RelayCommand]
+    private async Task ExportPromptsAsync(CancellationToken cancellationToken)
+    {
+        var path = _dialogService.ShowSaveFile(
+            "Export prompts", "Zip archives|*.zip|All files|*.*", "dictateflow-prompts.zip");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var count = await Task.Run(() => _promptsArchive.ExportZip(path), cancellationToken);
+            BackupStatus = $"✓ Exported {count} prompt file(s) to {path}.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Prompts export failed");
+            BackupStatus = $"✗ Export failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Imports a prompts zip into the prompts folder, confirming before existing files are
+    /// overwritten (Yes overwrites them all, No imports only new files), then reloads the
+    /// prompt modes.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportPromptsAsync(CancellationToken cancellationToken)
+    {
+        var path = _dialogService.ShowOpenFile("Import prompts", "Zip archives|*.zip|All files|*.*");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var overwrite = false;
+            var conflicts = await Task.Run(() => _promptsArchive.GetConflictingFiles(path), cancellationToken);
+            if (conflicts.Count > 0)
+            {
+                var answer = _dialogService.ConfirmYesNoCancel(
+                    "Import prompts",
+                    $"{conflicts.Count} prompt file(s) already exist:\n{string.Join("\n", conflicts)}\n\n"
+                    + "Overwrite them? Choose No to keep the existing files and import only new ones.");
+                if (answer is null)
+                {
+                    BackupStatus = "Import cancelled.";
+                    return;
+                }
+
+                overwrite = answer.Value;
+            }
+
+            var count = await Task.Run(() => _promptsArchive.ImportZip(path, overwrite), cancellationToken);
+            ReloadPrompts();
+            BackupStatus = $"✓ Imported {count} prompt file(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Prompts import failed");
+            BackupStatus = $"✗ Import failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Opens a folder in Windows Explorer (Diagnostics page path buttons).</summary>
+    /// <param name="path">The directory to open.</param>
+    [RelayCommand]
+    private void OpenFolder(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not open folder '{Path}'", path);
+            DiagnosticsStatus = "Could not open the folder.";
+        }
+    }
+
+    /// <summary>Loads the last 100 lines of the newest log file into the Diagnostics page.</summary>
+    [RelayCommand]
+    private async Task RefreshLogTailAsync(CancellationToken cancellationToken)
+    {
+        var lines = await Task.Run(() => _diagnosticsService.ReadLogTail(100), cancellationToken);
+        LogTail = string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>Copies the diagnostics report (versions, OS, redacted settings) to the clipboard.</summary>
+    [RelayCommand]
+    private async Task CopyDiagnosticsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var report = await Task.Run(_diagnosticsService.BuildReport, cancellationToken);
+            Clipboard.SetText(report);
+            DiagnosticsStatus = "✓ Diagnostics copied to the clipboard (API keys redacted).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Copy diagnostics failed");
+            DiagnosticsStatus = $"✗ Could not copy diagnostics: {ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// Writes the edited Speech provider configs into the in-memory settings (persisted by
     /// Save; Cancel reloads from disk).
     /// </summary>
@@ -806,12 +1081,6 @@ public partial class SettingsViewModel : ObservableObject
     private PromptMode? FindMode(string name)
         => PromptModes.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))
             ?? PromptModes.FirstOrDefault();
-
-    /// <summary>Empty endpoints are allowed (provider not yet configured); anything else must be an absolute http(s) URL.</summary>
-    private static bool IsValidOptionalEndpoint(string endpoint)
-        => string.IsNullOrWhiteSpace(endpoint)
-            || (Uri.TryCreate(endpoint.Trim(), UriKind.Absolute, out var uri)
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps));
 
     /// <summary>Shortens a reply for inline display.</summary>
     private static string Truncate(string text, int maxLength)
