@@ -21,6 +21,7 @@
     <ProjectReference Include="..\DictateFlow.Core\DictateFlow.Core.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.AzureFoundry\DictateFlow.Providers.AzureFoundry.csproj" />
     <ProjectReference Include="..\..\samples\DictateFlow.Samples.NullOutput\DictateFlow.Samples.NullOutput.csproj" />
+    <ProjectReference Include="..\DictateFlow.Providers.WhisperCpp\DictateFlow.Providers.WhisperCpp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

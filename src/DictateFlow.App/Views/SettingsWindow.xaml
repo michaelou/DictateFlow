@@ -231,6 +231,58 @@
                                  Text="{Binding MockSpeechText, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
+                    <!-- Local Whisper.cpp config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="WhisperCpp">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding WhisperStatusText}" />
+                        <Button Width="160"
+                                Margin="0,8,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Manage local models…"
+                                Command="{Binding OpenLocalModelsCommand}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Model" />
+                        <ComboBox Width="200"
+                                  HorizontalAlignment="Left"
+                                  ItemTemplate="{StaticResource DisplayNameItemTemplate}"
+                                  ItemsSource="{Binding WhisperModels}"
+                                  SelectedItem="{Binding SelectedWhisperModel}" />
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="Small is the recommended default (fast, low memory); Medium is more accurate for multilingual and longer dictation but slower." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding WhisperLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   TextWrapping="Wrap"
+                                   Text="One locale, e.g. en or el-GR (only the language part is used); leave empty for auto-detect, which also handles mixed-language dictation." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding WhisperTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
                     <Button Width="140"
                             Margin="0,16,0,0"
                             HorizontalAlignment="Left"
@@ -244,6 +296,140 @@
                                Foreground="{StaticResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Local Models (whisper.cpp engine and model manager) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Local Models">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Local models" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="The engine and models used by the Local Whisper.cpp speech provider — fully offline transcription. Downloads are verified (SHA-256) and usable immediately, no restart needed." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Speech engine" />
+                    <TextBlock Text="{Binding WhisperEngineStatus}" />
+
+                    <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Components" />
+                    <ItemsControl ItemsSource="{Binding LocalModels}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,10">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Width="80"
+                                                    Content="Download"
+                                                    Command="{Binding DataContext.DownloadLocalModelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding IsInstalled}" Value="False" />
+                                                                    <Condition Binding="{Binding IsBusy}" Value="False" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Width="66"
+                                                    Content="Cancel"
+                                                    Command="{Binding DataContext.CancelLocalModelDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <StackPanel Orientation="Horizontal">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding IsInstalled}" Value="True" />
+                                                                    <Condition Binding="{Binding IsBusy}" Value="False" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Button Width="56"
+                                                        Content="Verify"
+                                                        Command="{Binding DataContext.VerifyLocalModelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Width="56"
+                                                        Margin="6,0,0,0"
+                                                        Content="Delete"
+                                                        Command="{Binding DataContext.DeleteLocalModelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                            <TextBlock Margin="8,0,8,0"
+                                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                                       Text="{Binding StatusText}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <StackPanel Margin="0,6,0,0">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ProgressText}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <ProgressBar Height="8"
+                                                     Minimum="0"
+                                                     Maximum="100"
+                                                     Value="{Binding ProgressPercent, Mode=OneWay}" />
+                                        <TextBlock Margin="0,2,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   Text="{Binding ProgressText}" />
+                                    </StackPanel>
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding ActionResult}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Files are stored under your local app data folder (Engines and Models). Deleting a component frees the disk space; DictateFlow offers to download it again when needed." />
                 </StackPanel>
 
                 <!-- LLM (enhancement provider) page -->

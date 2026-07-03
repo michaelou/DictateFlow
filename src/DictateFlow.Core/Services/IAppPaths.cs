@@ -22,6 +22,19 @@ public interface IAppPaths
     /// <summary>Gets the directory that holds prompt definition files (populated in M4).</summary>
     string PromptsDirectory { get; }
 
+    /// <summary>
+    /// Gets the directory that holds local inference engines (e.g. whisper.cpp), one
+    /// subdirectory per engine. Rooted under local (non-roaming) application data in
+    /// production — engine binaries are large and machine-specific.
+    /// </summary>
+    string EnginesDirectory { get; }
+
+    /// <summary>
+    /// Gets the directory that holds local model files, one subdirectory per engine.
+    /// Rooted under local (non-roaming) application data in production.
+    /// </summary>
+    string ModelsDirectory { get; }
+
     /// <summary>Creates the full application data directory tree if any part of it is missing.</summary>
     void EnsureCreated();
 }

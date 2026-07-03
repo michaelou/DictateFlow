@@ -10,15 +10,15 @@ namespace DictateFlow.Core.Services.Validation;
 /// <summary>
 /// Default <see cref="ISettingsValidator"/> implementation. Provider config sections are
 /// inspected at the JSON level (Core does not know the provider config types), so the same
-/// rules apply to any registered provider: an active non-mock transcription/LLM provider must
-/// carry a non-empty <c>Endpoint</c> (absolute https), <c>ApiKey</c> and
-/// <c>DeploymentName</c>, numeric fields present on the active section must be in range, and
-/// entries of a transcription <c>Language</c> field must look like BCP-47 locale tags.
+/// rules apply to any registered provider: an active provider registered as requiring a
+/// connection (see <see cref="ProviderRegistration.RequiresConnection"/>) must carry a
+/// non-empty <c>Endpoint</c> (absolute https), <c>ApiKey</c> and <c>DeploymentName</c> —
+/// local and mock providers are exempt — numeric fields present on the active section must
+/// be in range, and entries of a transcription <c>Language</c> field must look like BCP-47
+/// locale tags.
 /// </summary>
 public sealed class SettingsValidator : ISettingsValidator
 {
-    private const string MockProviderName = "Mock";
-
     /// <summary>Lenient BCP-47 shape: a 2–3 letter language code plus optional subtags (en, en-US, zh-Hans-CN).</summary>
     private static readonly Regex LocaleTagPattern =
         new(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$", RegexOptions.Compiled);
@@ -94,7 +94,11 @@ public sealed class SettingsValidator : ISettingsValidator
         return null;
     }
 
-    /// <summary>Validates one transcription/LLM slot: the active name must be registered and, unless it is the mock, fully configured.</summary>
+    /// <summary>
+    /// Validates one transcription/LLM slot: the active name must be registered and, when the
+    /// provider registered as requiring a connection, fully configured. Local providers (e.g.
+    /// whisper.cpp) and mocks need no endpoint or credentials.
+    /// </summary>
     private void ValidateProvider(
         ProviderKind kind,
         string section,
@@ -108,9 +112,8 @@ public sealed class SettingsValidator : ISettingsValidator
         }
 
         var config = FindSection(configSections, resolvedName);
-        var isMock = string.Equals(resolvedName, MockProviderName, StringComparison.OrdinalIgnoreCase);
 
-        if (!isMock)
+        if (_catalog.RequiresConnection(kind, resolvedName))
         {
             if (config is null)
             {

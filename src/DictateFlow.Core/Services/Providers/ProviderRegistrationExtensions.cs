@@ -22,15 +22,21 @@ public static class ProviderRegistrationExtensions
     /// <typeparam name="T">The provider implementation.</typeparam>
     /// <param name="services">The service collection to populate.</param>
     /// <param name="name">The provider name used in settings; unique per kind, case-insensitive.</param>
+    /// <param name="requiresConnection">
+    /// Whether settings validation should require the remote-connection fields
+    /// (<c>Endpoint</c>, <c>ApiKey</c>, <c>DeploymentName</c>) when the provider is active.
+    /// Pass <see langword="false"/> for local and mock providers.
+    /// </param>
     /// <returns>The same service collection, for chaining.</returns>
     /// <remarks>
     /// <typeparamref name="T"/> itself is registered as a singleton unless it already has a
     /// registration — providers with special lifetimes (e.g. typed <c>HttpClient</c>s) keep
     /// theirs by registering it <b>before</b> this call.
     /// </remarks>
-    public static IServiceCollection AddTranscriptionProvider<T>(this IServiceCollection services, string name)
+    public static IServiceCollection AddTranscriptionProvider<T>(
+        this IServiceCollection services, string name, bool requiresConnection = true)
         where T : class, ITranscriptionProvider
-        => AddProvider<ITranscriptionProvider, T>(services, ProviderKind.Transcription, name);
+        => AddProvider<ITranscriptionProvider, T>(services, ProviderKind.Transcription, name, requiresConnection);
 
     /// <summary>
     /// Registers <typeparamref name="T"/> as the LLM provider named <paramref name="name"/>.
@@ -38,14 +44,17 @@ public static class ProviderRegistrationExtensions
     /// <typeparam name="T">The provider implementation.</typeparam>
     /// <param name="services">The service collection to populate.</param>
     /// <param name="name">The provider name used in settings; unique per kind, case-insensitive.</param>
+    /// <param name="requiresConnection"><inheritdoc cref="AddTranscriptionProvider{T}" path="/param[@name='requiresConnection']"/></param>
     /// <returns>The same service collection, for chaining.</returns>
     /// <remarks><inheritdoc cref="AddTranscriptionProvider{T}" path="/remarks"/></remarks>
-    public static IServiceCollection AddLLMProvider<T>(this IServiceCollection services, string name)
+    public static IServiceCollection AddLLMProvider<T>(
+        this IServiceCollection services, string name, bool requiresConnection = true)
         where T : class, ILLMProvider
-        => AddProvider<ILLMProvider, T>(services, ProviderKind.Llm, name);
+        => AddProvider<ILLMProvider, T>(services, ProviderKind.Llm, name, requiresConnection);
 
     /// <summary>
     /// Registers <typeparamref name="T"/> as the output provider named <paramref name="name"/>.
+    /// Output providers deliver text locally, so none of them require connection fields.
     /// </summary>
     /// <typeparam name="T">The provider implementation.</typeparam>
     /// <param name="services">The service collection to populate.</param>
@@ -54,7 +63,7 @@ public static class ProviderRegistrationExtensions
     /// <remarks><inheritdoc cref="AddTranscriptionProvider{T}" path="/remarks"/></remarks>
     public static IServiceCollection AddOutputProvider<T>(this IServiceCollection services, string name)
         where T : class, IOutputProvider
-        => AddProvider<IOutputProvider, T>(services, ProviderKind.Output, name);
+        => AddProvider<IOutputProvider, T>(services, ProviderKind.Output, name, requiresConnection: false);
 
     /// <summary>
     /// The shared registration: catalog entry + keyed registration. The keyed factory
@@ -63,13 +72,13 @@ public static class ProviderRegistrationExtensions
     /// preserved.
     /// </summary>
     private static IServiceCollection AddProvider<TService, TImplementation>(
-        IServiceCollection services, ProviderKind kind, string name)
+        IServiceCollection services, ProviderKind kind, string name, bool requiresConnection)
         where TService : class
         where TImplementation : class, TService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        GetOrCreateCatalog(services).Add(kind, name, typeof(TImplementation));
+        GetOrCreateCatalog(services).Add(kind, name, typeof(TImplementation), requiresConnection);
         services.TryAddSingleton<TImplementation>();
         services.AddKeyedTransient<TService>(name, (sp, _) => sp.GetRequiredService<TImplementation>());
         return services;
