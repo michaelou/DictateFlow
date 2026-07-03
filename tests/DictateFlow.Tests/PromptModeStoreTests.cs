@@ -1,3 +1,4 @@
+using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Prompts;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -91,5 +92,115 @@ public sealed class PromptModeStoreTests : IDisposable
         Assert.NotNull(raw);
         Assert.Equal(DefaultPromptModes.Raw.SystemPrompt, raw!.SystemPrompt);
         Assert.Equal(0.0, raw.Temperature);
+    }
+
+    [Fact]
+    public void GetAll_FileWithoutLlmEnabled_DefaultsToEnabled()
+    {
+        File.WriteAllText(PromptFile("Legacy"), """{"Name":"Legacy","Description":"d","SystemPrompt":"p"}""");
+
+        Assert.True(_store.GetByName("Legacy")!.LlmEnabled);
+    }
+
+    [Fact]
+    public void GetAll_LlmDisabledWithoutSystemPrompt_LoadsWithEmptyPrompt()
+    {
+        File.WriteAllText(PromptFile("Verbatim"), """{"Name":"Verbatim","Description":"d","LlmEnabled":false}""");
+
+        var mode = _store.GetByName("Verbatim");
+
+        Assert.NotNull(mode);
+        Assert.False(mode!.LlmEnabled);
+        Assert.Equal("", mode.SystemPrompt);
+    }
+
+    [Fact]
+    public void Save_NewMode_WritesFileAndRefreshesCacheWithoutReload()
+    {
+        _store.GetAll(); // populate the cache (seeds the five defaults)
+
+        _store.Save(new PromptMode("Custom", "desc", "prompt", 0.7, LlmEnabled: false));
+
+        Assert.True(File.Exists(PromptFile("Custom")));
+        var mode = _store.GetByName("Custom");
+        Assert.NotNull(mode);
+        Assert.Equal("desc", mode!.Description);
+        Assert.Equal("prompt", mode.SystemPrompt);
+        Assert.Equal(0.7, mode.Temperature);
+        Assert.False(mode.LlmEnabled);
+    }
+
+    [Fact]
+    public void Save_ExistingMode_Overwrites()
+    {
+        File.WriteAllText(PromptFile("Custom"), """{"Name":"Custom","Description":"old","SystemPrompt":"old"}""");
+        Assert.Equal("old", _store.GetByName("Custom")!.Description);
+
+        _store.Save(new PromptMode("Custom", "new", "new prompt", null));
+
+        Assert.Single(Directory.GetFiles(_paths.PromptsDirectory, "*.json"));
+        Assert.Equal("new", _store.GetByName("Custom")!.Description);
+    }
+
+    [Theory]
+    [InlineData("a/b")]
+    [InlineData("  ")]
+    [InlineData("CON")]
+    [InlineData("dots.")]
+    public void Save_InvalidName_ThrowsAndWritesNothing(string name)
+    {
+        File.WriteAllText(PromptFile("Existing"), """{"Name":"Existing","Description":"d","SystemPrompt":"p"}""");
+
+        Assert.Throws<ArgumentException>(() => _store.Save(new PromptMode(name, "", "p", null)));
+        Assert.Single(Directory.GetFiles(_paths.PromptsDirectory, "*.json"));
+    }
+
+    [Fact]
+    public void Save_TrimsTheName()
+    {
+        File.WriteAllText(PromptFile("Existing"), """{"Name":"Existing","Description":"d","SystemPrompt":"p"}""");
+
+        _store.Save(new PromptMode("  Padded  ", "", "p", null));
+
+        Assert.True(File.Exists(PromptFile("Padded")));
+        Assert.Equal("Padded", _store.GetByName("Padded")!.Name);
+    }
+
+    [Fact]
+    public void Delete_IsCaseInsensitive_AndRefreshesCache()
+    {
+        File.WriteAllText(PromptFile("First"), """{"Name":"First","Description":"d","SystemPrompt":"p"}""");
+        File.WriteAllText(PromptFile("Second"), """{"Name":"Second","Description":"d","SystemPrompt":"p"}""");
+        Assert.Equal(2, _store.GetAll().Count);
+
+        _store.Delete("fIRST");
+
+        Assert.False(File.Exists(PromptFile("First")));
+        Assert.Null(_store.GetByName("First"));
+        Assert.NotNull(_store.GetByName("Second"));
+    }
+
+    [Fact]
+    public void Delete_MissingMode_IsANoOp()
+    {
+        File.WriteAllText(PromptFile("Only"), """{"Name":"Only","Description":"d","SystemPrompt":"p"}""");
+
+        _store.Delete("Missing");
+
+        Assert.NotNull(_store.GetByName("Only"));
+    }
+
+    [Fact]
+    public void SaveThenDelete_RenameFlow_LeavesOneFile()
+    {
+        File.WriteAllText(PromptFile("Old"), """{"Name":"Old","Description":"d","SystemPrompt":"p"}""");
+        File.WriteAllText(PromptFile("Other"), """{"Name":"Other","Description":"d","SystemPrompt":"p"}""");
+
+        _store.Save(new PromptMode("New", "d", "p", null));
+        _store.Delete("Old");
+
+        Assert.False(File.Exists(PromptFile("Old")));
+        Assert.True(File.Exists(PromptFile("New")));
+        Assert.Equal(2, _store.GetAll().Count);
     }
 }

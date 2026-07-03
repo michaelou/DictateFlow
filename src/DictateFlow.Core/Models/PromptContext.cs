@@ -9,9 +9,11 @@ namespace DictateFlow.Core.Models;
 /// <param name="Temperature">The sampling temperature for this call.</param>
 /// <param name="MaxTokens">The maximum number of completion tokens for this call.</param>
 /// <param name="ModeName">Name of the prompt mode the context was resolved from.</param>
+/// <param name="LlmEnabled">Whether the LLM call should run; when <see langword="false"/> the raw transcript is delivered as-is.</param>
 public sealed record PromptContext(
     string SystemPrompt,
     string Transcript,
     double Temperature,
     int MaxTokens,
-    string ModeName);
+    string ModeName,
+    bool LlmEnabled = true);

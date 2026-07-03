@@ -6,6 +6,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DictateFlow.App.Services;
+using DictateFlow.App.Views;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
@@ -43,7 +44,8 @@ public partial class ApplicationRuleItem : ObservableObject
 /// View model backing the Settings window. Exposes the section navigation skeleton plus the
 /// General/Recording page, the Speech and LLM pages (a provider dropdown fed by the provider
 /// registry that switches between the AzureFoundry and Mock config sections, with test
-/// connection), the Prompts page (loaded modes, active-mode selector, reload, open-folder,
+/// connection), the Prompts page (loaded modes with in-app create/edit/delete, active-mode
+/// selector, reload, open-folder,
 /// and the Prompt Tester that runs a pasted transcript through the real resolver and the
 /// selected LLM provider) and the Output page (registry-fed provider dropdown and
 /// delivery-mode selector, read live by the pipeline on every run). Save persists through
@@ -715,6 +717,115 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Opens the editor dialog to create a new prompt mode.</summary>
+    [RelayCommand]
+    private void NewPromptMode() => ShowPromptModeEditor(null);
+
+    /// <summary>Opens the editor dialog for an existing prompt mode.</summary>
+    [RelayCommand]
+    private void EditPromptMode(PromptMode mode) => ShowPromptModeEditor(mode);
+
+    /// <summary>Deletes a prompt mode after confirmation; the last remaining mode cannot be deleted.</summary>
+    [RelayCommand]
+    private void DeletePromptMode(PromptMode mode)
+    {
+        if (PromptModes.Count <= 1)
+        {
+            // With no files left the store would re-seed all five defaults on the next reload.
+            ValidationError = "At least one prompt mode must exist.";
+            return;
+        }
+
+        var isReferenced =
+            string.Equals(_settingsService.Current.ActivePromptMode, mode.Name, StringComparison.OrdinalIgnoreCase)
+            || ApplicationRules.Any(r => string.Equals(r.PromptMode, mode.Name, StringComparison.OrdinalIgnoreCase));
+        var message = $"Delete the prompt mode '{mode.Name}'? Its file is removed from the prompts folder."
+            + (isReferenced
+                ? "\n\nThis mode is active or used by an application rule; affected dictations will fall back to Raw."
+                : "");
+        if (!_dialogService.Confirm("Delete prompt mode", message))
+        {
+            return;
+        }
+
+        try
+        {
+            _promptModeStore.Delete(mode.Name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not delete prompt mode '{Name}'", mode.Name);
+            ValidationError = $"Could not delete the mode: {ex.Message}";
+            return;
+        }
+
+        ReloadPrompts();
+    }
+
+    /// <summary>
+    /// Shows the editor dialog and persists its result. A rename writes the new file, removes
+    /// the old one, remaps application rules to the new name, and keeps the mode selected.
+    /// </summary>
+    private void ShowPromptModeEditor(PromptMode? existing)
+    {
+        var otherNames = PromptModes
+            .Where(m => existing is null || !string.Equals(m.Name, existing.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(m => m.Name)
+            .ToList();
+        var viewModel = new PromptModeEditorViewModel(existing, otherNames);
+        var window = new PromptModeEditorWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.ShowDialog();
+
+        if (viewModel.Result is not { } result)
+        {
+            return;
+        }
+
+        var renamedFrom = viewModel.OriginalName is { } oldName
+            && !string.Equals(oldName, result.Name, StringComparison.OrdinalIgnoreCase)
+                ? oldName
+                : null;
+        try
+        {
+            _promptModeStore.Save(result);
+            if (renamedFrom is not null)
+            {
+                _promptModeStore.Delete(renamedFrom);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not save prompt mode '{Name}'", result.Name);
+            ValidationError = $"Could not save the mode: {ex.Message}";
+            return;
+        }
+
+        if (renamedFrom is not null)
+        {
+            foreach (var rule in ApplicationRules.Where(
+                r => string.Equals(r.PromptMode, renamedFrom, StringComparison.OrdinalIgnoreCase)))
+            {
+                rule.PromptMode = result.Name;
+            }
+        }
+
+        var selectedWasRenamed = renamedFrom is not null
+            && string.Equals(SelectedPromptMode?.Name, renamedFrom, StringComparison.OrdinalIgnoreCase);
+        var testerWasRenamed = renamedFrom is not null
+            && string.Equals(TesterMode?.Name, renamedFrom, StringComparison.OrdinalIgnoreCase);
+        ReloadPrompts();
+        if (selectedWasRenamed)
+        {
+            SelectedPromptMode = FindMode(result.Name);
+        }
+
+        if (testerWasRenamed)
+        {
+            TesterMode = FindMode(result.Name);
+        }
+    }
+
     /// <summary>
     /// Runs the pasted transcript through the real resolver and the LLM provider selected on
     /// the LLM page (using the values as entered) so prompts can be debugged without any
@@ -735,6 +846,13 @@ public partial class SettingsViewModel : ObservableObject
             var provider = _providerRegistry.Resolve<ILLMProvider>(ProviderKind.Llm, SelectedLlmProvider);
 
             var context = _promptResolver.Resolve(TesterTranscript, TesterMode.Name);
+            if (!context.LlmEnabled)
+            {
+                TesterResolvedPrompt = "(LLM disabled for this mode — no prompt is sent.)";
+                TesterResult = TesterTranscript;
+                return;
+            }
+
             TesterResolvedPrompt = context.SystemPrompt;
             TesterResult = "Running…";
 

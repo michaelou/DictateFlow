@@ -201,6 +201,14 @@ public sealed class DictationPipeline : IDictationPipeline
             var modeName = _promptModeSelector.SelectMode(applicationName);
             timings.ModeName = modeName;
             var context = _promptResolver.Resolve(transcript, modeName);
+            if (!context.LlmEnabled)
+            {
+                timings.EnhancementMs = stopwatch.ElapsedMilliseconds;
+                _logger.LogInformation(
+                    "LLM disabled for mode '{ModeName}'; delivering the raw transcript", context.ModeName);
+                return (transcript, null);
+            }
+
             var enhanced = await _llmProvider.ProcessAsync(context, cancellationToken).ConfigureAwait(false);
             timings.EnhancementMs = stopwatch.ElapsedMilliseconds;
             _logger.LogDebug(

@@ -57,6 +57,13 @@ public sealed partial class PromptResolver : IPromptResolver
             mode = _modeStore.GetByName(DefaultPromptModes.RawModeName) ?? DefaultPromptModes.Raw;
         }
 
+        // A mode that skips the LLM needs no resolved prompt or sampling parameters.
+        if (!mode.LlmEnabled)
+        {
+            _logger.LogDebug("Prompt mode '{ModeName}' has the LLM disabled; skipping prompt resolution", mode.Name);
+            return new PromptContext("", transcript, Temperature: 0, MaxTokens: 0, mode.Name, LlmEnabled: false);
+        }
+
         var settings = _settingsService.Current;
         var systemPrompt = TokenRegex().Replace(mode.SystemPrompt, match => ResolveToken(match, transcript, mode.Name, settings));
 

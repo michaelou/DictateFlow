@@ -17,4 +17,19 @@ public interface IPromptModeStore
 
     /// <summary>Re-scans the prompts directory so external edits take effect without a restart.</summary>
     void Reload();
+
+    /// <summary>
+    /// Writes the mode to <c>{Name}.json</c> (creating or overwriting it) and refreshes the
+    /// loaded modes.
+    /// </summary>
+    /// <param name="mode">The mode to persist.</param>
+    /// <exception cref="ArgumentException">The mode name is not a valid file name.</exception>
+    void Save(PromptMode mode);
+
+    /// <summary>
+    /// Deletes the mode file whose name matches case-insensitively and refreshes the loaded
+    /// modes; does nothing when no such file exists.
+    /// </summary>
+    /// <param name="name">The mode name to delete.</param>
+    void Delete(string name);
 }
