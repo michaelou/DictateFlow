@@ -1,6 +1,8 @@
 <Window x:Class="DictateFlow.App.Views.CostDashboardWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DictateFlow Cost Dashboard"
+        Background="{DynamicResource WindowBackgroundBrush}"
         Title="DictateFlow — Cost Dashboard"
         Width="720"
         Height="380"
@@ -80,7 +82,7 @@
 
         <TextBlock Grid.Row="2"
                    Margin="0,8,0,0"
-                   Foreground="{x:Static SystemColors.GrayTextBrush}"
+                   Foreground="{StaticResource SecondaryTextBrush}"
                    TextWrapping="Wrap"
                    Text="{Binding StatusMessage}" />
     </Grid>
