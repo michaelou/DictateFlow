@@ -15,6 +15,10 @@
     <!-- Keep the informational version equal to <Version> (no +commit-hash suffix) so the
          version shown in Settings › Diagnostics and used by the update check is clean. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2026 Andreas Michaelou</Copyright>
+    <RepositoryUrl>https://github.com/michaelou/DictateFlow</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>

@@ -86,3 +86,7 @@ All user data lives in `%APPDATA%\DictateFlow\`:
 ```
 
 If `settings.json` is missing or unreadable, the app falls back to defaults and logs a warning — it never crashes on bad config.
+
+## License
+
+DictateFlow is licensed under the [MIT License](LICENSE).
