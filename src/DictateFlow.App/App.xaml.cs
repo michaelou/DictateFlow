@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -5,6 +6,9 @@ using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Startup;
+using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Validation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,12 +29,18 @@ public partial class App : Application
     private ITrayIconService? _trayIconService;
     private Microsoft.Extensions.Logging.ILogger? _logger;
 
-    /// <summary>Builds the host, initializes services and shows the tray icon.</summary>
+    /// <summary>
+    /// Builds the host and shows the tray icon as fast as possible (target: &lt; 2 s,
+    /// measured and logged), then finishes the non-critical initialization — database
+    /// schema, prompt store, settings validation, startup-registration reconciliation and
+    /// the first-run welcome — off the startup path.
+    /// </summary>
     /// <param name="e">Startup arguments.</param>
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         RegisterGlobalExceptionHandlers();
+        var startupStopwatch = Stopwatch.StartNew();
 
         try
         {
@@ -56,17 +66,12 @@ public partial class App : Application
 
             await _host.Services.GetRequiredService<ISettingsService>().LoadAsync();
 
-            // Load (and on first run seed) the prompt modes now, so the prompts folder is
-            // populated before the user first opens it and any load warnings surface early.
-            var promptModes = _host.Services.GetRequiredService<IPromptModeStore>().GetAll();
-            _logger.LogInformation("{Count} prompt modes available", promptModes.Count);
-
-            await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
-            _logger.LogInformation("Database initialized");
-
             _trayIconService = _host.Services.GetRequiredService<ITrayIconService>();
             _trayIconService.Show();
-            _logger.LogInformation("Tray icon shown; startup complete");
+            startupStopwatch.Stop();
+            _logger.LogInformation(
+                "Tray icon shown {ElapsedMs} ms after startup; deferring remaining initialization",
+                startupStopwatch.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -78,7 +83,141 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+            return;
         }
+
+        await DeferredStartupAsync();
+    }
+
+    /// <summary>
+    /// The initialization that does not gate the tray icon: database schema, prompt store
+    /// seeding/loading, settings validation (with mock fallback), launch-with-Windows
+    /// reconciliation and the first-run welcome. Failures here are logged, never fatal.
+    /// </summary>
+    private async Task DeferredStartupAsync()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _host.Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
+            _logger?.LogInformation("Database initialized");
+
+            // Load (and on first run seed) the prompt modes off the UI thread, so the
+            // prompts folder is populated before the user first opens it.
+            var promptModeStore = _host.Services.GetRequiredService<IPromptModeStore>();
+            var promptModes = await Task.Run(promptModeStore.GetAll);
+            _logger?.LogInformation("{Count} prompt modes available", promptModes.Count);
+
+            ValidateSettingsAtStartup();
+            ReconcileStartupRegistration();
+            await ShowFirstRunWelcomeAsync();
+
+            _logger?.LogInformation("Deferred startup work complete");
+        }
+        catch (Exception ex)
+        {
+            // The tray is already up — a deferred-init problem must not take the app down.
+            _logger?.LogError(ex, "Deferred startup initialization failed");
+        }
+    }
+
+    /// <summary>
+    /// Runs the settings validator once at startup. All findings are logged; when the
+    /// active speech/LLM configuration is unusable the affected provider falls back to
+    /// Mock (in memory only — the user's file is left as-is to be fixed in Settings) and a
+    /// tray notification says so. The app never fails to start over settings.
+    /// </summary>
+    private void ValidateSettingsAtStartup()
+    {
+        var settingsService = _host!.Services.GetRequiredService<ISettingsService>();
+        var findings = _host.Services.GetRequiredService<ISettingsValidator>().Validate(settingsService.Current);
+
+        foreach (var finding in findings)
+        {
+            if (finding.Severity == SettingsValidationSeverity.Error)
+            {
+                _logger?.LogError("Settings validation: [{Section}] {Message}", finding.Section, finding.Message);
+            }
+            else
+            {
+                _logger?.LogWarning("Settings validation: [{Section}] {Message}", finding.Section, finding.Message);
+            }
+        }
+
+        var fallbacks = new List<string>();
+        var activeProviders = settingsService.Current.ActiveProviders;
+        if (findings.Any(f => f.Severity == SettingsValidationSeverity.Error && f.Section == "Speech"))
+        {
+            activeProviders.Transcription = MockTranscriptionProvider.RegistrationName;
+            fallbacks.Add("speech");
+        }
+
+        if (findings.Any(f => f.Severity == SettingsValidationSeverity.Error && f.Section == "LLM"))
+        {
+            activeProviders.Llm = Core.Services.Llm.MockLLMProvider.RegistrationName;
+            fallbacks.Add("LLM");
+        }
+
+        if (findings.Any(f => f.Severity == SettingsValidationSeverity.Error && f.Section == "Output"))
+        {
+            activeProviders.Output = "";
+            fallbacks.Add("output");
+        }
+
+        if (fallbacks.Count > 0)
+        {
+            _logger?.LogWarning(
+                "Active {Providers} provider configuration is unusable; falling back to defaults for this session",
+                string.Join("/", fallbacks));
+            var windowService = _host.Services.GetRequiredService<IWindowService>();
+            _trayIconService?.ShowWarningNotification(
+                "DictateFlow settings problem",
+                $"The configured {string.Join(" and ", fallbacks)} provider is invalid — using the built-in fallback for now. Click to open Settings.",
+                onClick: windowService.ShowSettingsWindow);
+        }
+    }
+
+    /// <summary>
+    /// Repairs the launch-with-Windows Run entry when the setting is on but the entry is
+    /// missing or points at a stale executable path (e.g. the app was moved).
+    /// </summary>
+    private void ReconcileStartupRegistration()
+    {
+        var settings = _host!.Services.GetRequiredService<ISettingsService>().Current;
+        var registration = _host.Services.GetRequiredService<IStartupRegistration>();
+        if (registration.Reconcile(settings.General.LaunchAtStartup))
+        {
+            _logger?.LogInformation("Launch-with-Windows registration reconciled at startup");
+        }
+    }
+
+    /// <summary>
+    /// Shows the one-time welcome notification on a fresh install: the hotkey hint plus a
+    /// pointer to Settings (clicking the notification opens it), then persists
+    /// <c>General.FirstRunCompleted</c>.
+    /// </summary>
+    private async Task ShowFirstRunWelcomeAsync()
+    {
+        var settingsService = _host!.Services.GetRequiredService<ISettingsService>();
+        if (settingsService.Current.General.FirstRunCompleted)
+        {
+            return;
+        }
+
+        var hotkey = settingsService.Current.Recording.Hotkey;
+        var windowService = _host.Services.GetRequiredService<IWindowService>();
+        _trayIconService?.ShowInfoNotification(
+            "Welcome to DictateFlow",
+            $"Press {hotkey} to dictate into any app. Click here to configure speech and LLM providers in Settings.",
+            onClick: windowService.ShowSettingsWindow);
+
+        settingsService.Current.General.FirstRunCompleted = true;
+        await settingsService.SaveAsync();
+        _logger?.LogInformation("First-run welcome shown");
     }
 
     /// <summary>Disposes the tray icon, stops the host and flushes the log.</summary>

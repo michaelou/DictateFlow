@@ -117,6 +117,19 @@ public sealed class ServiceRegistrationTests : IDisposable
     }
 
     [Fact]
+    public void AddDictateFlow_ResolvesM8PolishServices()
+    {
+        using var provider = BuildProvider();
+
+        Assert.NotNull(provider.GetRequiredService<Core.Services.Validation.ISettingsValidator>());
+        Assert.NotNull(provider.GetRequiredService<Core.Services.Transfer.ISettingsTransfer>());
+        Assert.NotNull(provider.GetRequiredService<Core.Services.Transfer.IPromptsArchive>());
+        Assert.NotNull(provider.GetRequiredService<Core.Services.Diagnostics.IDiagnosticsService>());
+        Assert.NotNull(provider.GetRequiredService<Core.Services.Startup.IStartupRegistration>());
+        Assert.NotNull(provider.GetRequiredService<IDialogService>());
+    }
+
+    [Fact]
     public void AddDictateFlow_DictationControllerIsSingleton()
     {
         using var provider = BuildProvider();

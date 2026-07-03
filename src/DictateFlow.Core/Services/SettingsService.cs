@@ -86,6 +86,13 @@ public sealed class SettingsService : ISettingsService
         SettingsChanged?.Invoke(this, Current);
     }
 
+    /// <inheritdoc />
+    public Task ReplaceAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    {
+        Current = settings;
+        return SaveAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Parses the file content, runs the schema migrations on the raw JSON (writing the file
     /// back when one changed it) and deserializes the result. Migrating at the JSON level
