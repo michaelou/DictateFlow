@@ -4,7 +4,14 @@ namespace DictateFlow.Core.Services.Providers;
 /// <param name="Kind">The provider slot the registration fills.</param>
 /// <param name="Name">The name used in settings and as the keyed-DI service key.</param>
 /// <param name="ImplementationType">The concrete provider type.</param>
-public sealed record ProviderRegistration(ProviderKind Kind, string Name, Type ImplementationType);
+/// <param name="RequiresConnection">
+/// Whether the provider talks to a remote service and therefore needs the connection fields
+/// (<c>Endpoint</c>, <c>ApiKey</c>, <c>DeploymentName</c>) in its config section. Local and
+/// mock providers register with <see langword="false"/> so settings validation does not
+/// demand credentials they don't use.
+/// </param>
+public sealed record ProviderRegistration(
+    ProviderKind Kind, string Name, Type ImplementationType, bool RequiresConnection);
 
 /// <summary>
 /// Records every provider registered through the
@@ -23,8 +30,9 @@ public sealed class ProviderCatalog
     /// <param name="kind">The provider slot being filled.</param>
     /// <param name="name">The settings name; must be unique per kind (case-insensitive).</param>
     /// <param name="implementationType">The concrete provider type.</param>
+    /// <param name="requiresConnection">Whether validation should demand the remote-connection config fields.</param>
     /// <exception cref="InvalidOperationException"><paramref name="name"/> is already registered for <paramref name="kind"/>.</exception>
-    public void Add(ProviderKind kind, string name, Type implementationType)
+    public void Add(ProviderKind kind, string name, Type implementationType, bool requiresConnection = true)
     {
         if (TryGetRegisteredName(kind, name, out _))
         {
@@ -32,8 +40,19 @@ public sealed class ProviderCatalog
                 $"A {kind} provider named '{name}' is already registered.");
         }
 
-        _registrations.Add(new ProviderRegistration(kind, name, implementationType));
+        _registrations.Add(new ProviderRegistration(kind, name, implementationType, requiresConnection));
     }
+
+    /// <summary>
+    /// Whether the named provider registered as needing remote-connection config fields;
+    /// unknown names return <see langword="false"/> (they fail name validation instead).
+    /// </summary>
+    /// <param name="kind">The provider slot to search.</param>
+    /// <param name="name">The name as configured (case-insensitive).</param>
+    public bool RequiresConnection(ProviderKind kind, string name)
+        => _registrations.FirstOrDefault(
+            r => r.Kind == kind && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?.RequiresConnection ?? false;
 
     /// <summary>Gets the registered provider names of one kind, in registration order.</summary>
     /// <param name="kind">The provider slot to enumerate.</param>

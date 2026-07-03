@@ -17,11 +17,12 @@ public sealed class SettingsValidatorTests
     private static SettingsValidator CreateValidator(params string[] knownModes)
     {
         var catalog = new ProviderCatalog();
-        catalog.Add(ProviderKind.Transcription, "Mock", typeof(object));
+        catalog.Add(ProviderKind.Transcription, "Mock", typeof(object), requiresConnection: false);
         catalog.Add(ProviderKind.Transcription, "AzureFoundry", typeof(object));
-        catalog.Add(ProviderKind.Llm, "Mock", typeof(object));
+        catalog.Add(ProviderKind.Transcription, "WhisperCpp", typeof(object), requiresConnection: false);
+        catalog.Add(ProviderKind.Llm, "Mock", typeof(object), requiresConnection: false);
         catalog.Add(ProviderKind.Llm, "AzureFoundry", typeof(object));
-        catalog.Add(ProviderKind.Output, "ClipboardPaste", typeof(object));
+        catalog.Add(ProviderKind.Output, "ClipboardPaste", typeof(object), requiresConnection: false);
 
         var store = new Mock<IPromptModeStore>();
         store.Setup(s => s.GetByName(It.IsAny<string>()))
@@ -162,6 +163,66 @@ public sealed class SettingsValidatorTests
 
         var finding = Single(CreateValidator("Raw").Validate(settings), "Output");
         Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void ActiveLocalProvider_NeedsNoConnectionFields()
+    {
+        // Regression: with Local Whisper.cpp active, Save must not demand the cloud-only
+        // Endpoint/ApiKey/DeploymentName fields.
+        var settings = new AppSettings();
+        settings.ActiveProviders.Transcription = "WhisperCpp";
+        settings.Providers.Transcription["WhisperCpp"] = JsonSerializer.SerializeToElement(new
+        {
+            Model = "ggml-small",
+            Language = "",
+            Threads = 0,
+            TimeoutSeconds = 120,
+        });
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Fact]
+    public void ActiveLocalProviderWithoutConfigSection_HasNoFindings()
+    {
+        // A local provider works from defaults; a missing section is not an error.
+        var settings = new AppSettings();
+        settings.ActiveProviders.Transcription = "WhisperCpp";
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(601)]
+    public void LocalProviderTimeoutOutOfRange_IsStillSpeechError(int timeoutSeconds)
+    {
+        var settings = new AppSettings();
+        settings.ActiveProviders.Transcription = "WhisperCpp";
+        settings.Providers.Transcription["WhisperCpp"] = JsonSerializer.SerializeToElement(new
+        {
+            Model = "ggml-small",
+            TimeoutSeconds = timeoutSeconds,
+        });
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Speech");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void LocalProviderMalformedLanguage_IsStillSpeechWarning()
+    {
+        var settings = new AppSettings();
+        settings.ActiveProviders.Transcription = "WhisperCpp";
+        settings.Providers.Transcription["WhisperCpp"] = JsonSerializer.SerializeToElement(new
+        {
+            Model = "ggml-small",
+            Language = "greek",
+        });
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Speech");
+        Assert.Equal(SettingsValidationSeverity.Warning, finding.Severity);
     }
 
     [Fact]

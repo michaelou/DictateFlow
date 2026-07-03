@@ -98,11 +98,15 @@ public static class ServiceCollectionExtensions
         services.AddWhisperCppTranscription();
 
         // Mock providers are registered first: the first name of a kind is the fallback used
-        // when the configured active name is unknown (and the dropdown default).
-        services.AddTranscriptionProvider<MockTranscriptionProvider>(MockTranscriptionProvider.RegistrationName);
+        // when the configured active name is unknown (and the dropdown default). Mocks and
+        // the local whisper.cpp provider need no endpoint/credentials, so they register with
+        // requiresConnection: false and settings validation leaves them alone.
+        services.AddTranscriptionProvider<MockTranscriptionProvider>(
+            MockTranscriptionProvider.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<AzureFoundryTranscriptionProvider>(AzureFoundryProviders.RegistrationName);
-        services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(WhisperCppProviders.RegistrationName);
-        services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName);
+        services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(
+            WhisperCppProviders.RegistrationName, requiresConnection: false);
+        services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<AzureFoundryLLMProvider>(AzureFoundryProviders.RegistrationName);
         services.AddOutputProvider<ClipboardPasteOutputProvider>(OutputProviderNames.ClipboardPaste);
         services.AddOutputProvider<SimulatedKeyboardOutputProvider>(OutputProviderNames.SimulatedKeyboard);
