@@ -50,9 +50,11 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Per-user install by default (no admin prompt). {autopf} resolves to a per-user Programs
-; folder when non-elevated and to Program Files when the user chooses "install for all users".
-PrivilegesRequired=lowest
+; Install into Program Files by default. This requires administrator rights, so the setup
+; prompts for UAC elevation on launch; with elevation {autopf} resolves to C:\Program Files.
+; PrivilegesRequiredOverridesAllowed lets the user drop to a per-user install (into
+; %LocalAppData%\Programs) from the wizard or command line if they prefer.
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog commandline
 
 [Languages]

@@ -74,9 +74,10 @@ Example — build the artifacts locally without publishing anything:
 
 [`installer/DictateFlow.iss`](../installer/DictateFlow.iss) packages the publish output:
 
-- App name **DictateFlow**, publisher **Belugga**, default path `{autopf}\DictateFlow`.
-- Installs per-user by default (**no admin prompt**); the user can choose "install for all
-  users" in the wizard, which elevates and installs into Program Files.
+- App name **DictateFlow**, publisher **Belugga**, default path `C:\Program Files\DictateFlow`.
+- Installs for all users by default, so it **prompts for UAC elevation** on launch (writing
+  to Program Files requires admin rights). The user can drop to a per-user install (into
+  `%LocalAppData%\Programs`, no elevation) from the wizard if they prefer.
 - Creates a Start Menu shortcut and an optional (unchecked) Desktop shortcut.
 - Supports uninstall and uses the app icon.
 
