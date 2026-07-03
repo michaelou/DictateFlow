@@ -1168,21 +1168,40 @@
             </ScrollViewer>
         </Border>
 
-        <StackPanel Grid.Row="1"
-                    Grid.Column="0"
-                    Grid.ColumnSpan="2"
-                    Margin="0,8,0,0"
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal">
-            <Button Width="88"
-                    Margin="0,0,8,0"
-                    Content="_Save"
-                    IsDefault="True"
-                    Command="{Binding SaveCommand}" />
-            <Button Width="88"
-                    Content="_Cancel"
-                    IsCancel="True"
-                    Command="{Binding CancelCommand}" />
-        </StackPanel>
+        <DockPanel Grid.Row="1"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="2"
+                   Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Width="88"
+                        Margin="0,0,8,0"
+                        Content="_Save"
+                        IsDefault="True"
+                        Command="{Binding SaveCommand}" />
+                <Button Width="88"
+                        Content="_Cancel"
+                        IsCancel="True"
+                        Command="{Binding CancelCommand}" />
+            </StackPanel>
+            <!-- Soft save confirmation; auto-clears after a few seconds (SettingsViewModel). -->
+            <TextBlock VerticalAlignment="Center"
+                       Foreground="{StaticResource AccentBrush}"
+                       FontWeight="SemiBold"
+                       Text="{Binding SaveStatus}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Opacity" Value="1" />
+                        <Style.Triggers>
+                            <Trigger Property="Text" Value="{x:Null}">
+                                <Setter Property="Opacity" Value="0" />
+                            </Trigger>
+                            <Trigger Property="Text" Value="">
+                                <Setter Property="Opacity" Value="0" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DockPanel>
     </Grid>
 </Window>

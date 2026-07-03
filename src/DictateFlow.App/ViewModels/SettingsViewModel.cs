@@ -121,8 +121,8 @@ public partial class SettingsViewModel : ObservableObject
 
     private bool _isAutomaticOutput;
 
-    /// <summary>The warning text already shown once; pressing Save again with the same warnings closes the window.</summary>
-    private string? _acknowledgedWarnings;
+    /// <summary>Clears the transient <see cref="SaveStatus"/> confirmation a few seconds after Save.</summary>
+    private System.Windows.Threading.DispatcherTimer? _saveStatusTimer;
 
     /// <summary>Initializes a new instance of the <see cref="SettingsViewModel"/> class.</summary>
     /// <param name="settingsService">Persists and reloads application settings.</param>
@@ -295,6 +295,10 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the validation message shown under the settings controls, if any.</summary>
     [ObservableProperty]
     private string? _validationError;
+
+    /// <summary>Gets or sets the brief, self-dismissing confirmation shown next to the Save button after a successful save.</summary>
+    [ObservableProperty]
+    private string? _saveStatus;
 
     /// <summary>Gets or sets the silence auto-stop timeout in seconds.</summary>
     [ObservableProperty]
@@ -627,9 +631,9 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>
     /// Applies the edits to the in-memory settings, validates them with the
-    /// <see cref="ISettingsValidator"/>, and persists. Errors block the save and navigate to
-    /// the offending page; warnings save but stay visible — pressing Save again with the
-    /// same warnings closes the window.
+    /// <see cref="ISettingsValidator"/>, and persists. The window stays open on Save; a brief
+    /// confirmation appears next to the button. Errors block the save and navigate to the
+    /// offending page; warnings save but stay visible.
     /// </summary>
     [RelayCommand]
     private async Task SaveAsync(CancellationToken cancellationToken)
@@ -663,23 +667,39 @@ public partial class SettingsViewModel : ObservableObject
 
         if (startupProblem)
         {
-            return; // saved, but keep the window open so the registry message is seen
+            return; // saved, but the registry message stays in ValidationError so it is seen
         }
 
         var warnings = findings.Where(f => f.Severity == SettingsValidationSeverity.Warning).ToList();
         if (warnings.Count > 0)
         {
-            var text = "Saved with warnings:\n" + string.Join("\n", warnings.Select(f => $"• {f.Section}: {f.Message}"));
-            if (!string.Equals(text, _acknowledgedWarnings, StringComparison.Ordinal))
-            {
-                _acknowledgedWarnings = text;
-                ValidationError = text;
-                return; // saved; Save again (or close) once the warnings are read
-            }
+            ValidationError = "Saved with warnings:\n" + string.Join("\n", warnings.Select(f => $"• {f.Section}: {f.Message}"));
+            return; // saved; the warnings stay visible until the next edit
         }
 
         ValidationError = null;
-        CloseRequested?.Invoke(this, EventArgs.Empty);
+        ShowSaveConfirmation("✓ Settings saved");
+    }
+
+    /// <summary>Shows a brief confirmation next to the Save button and schedules it to clear itself.</summary>
+    private void ShowSaveConfirmation(string message)
+    {
+        SaveStatus = message;
+
+        _saveStatusTimer ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        _saveStatusTimer.Tick -= OnSaveStatusTimerTick;
+        _saveStatusTimer.Tick += OnSaveStatusTimerTick;
+        _saveStatusTimer.Stop();
+        _saveStatusTimer.Start();
+    }
+
+    private void OnSaveStatusTimerTick(object? sender, EventArgs e)
+    {
+        _saveStatusTimer?.Stop();
+        SaveStatus = null;
     }
 
     /// <summary>
