@@ -81,9 +81,52 @@ public sealed class AzureFoundryTranscriptionProviderTests
     }
 
     [Fact]
-    public async Task TranscribeAsync_EmptyLanguage_OmitsLocales()
+    public async Task TranscribeAsync_MultipleLanguagesStandardModel_SentAsCandidateLocales()
     {
-        _config.Language = "";
+        _config.Language = "en-US, el-GR";
+        _config.DeploymentName = ""; // standard model: candidate-locale language identification
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.Contains("""{"locales":["en-US","el-GR"]""", handler.Requests[0].Body);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_MultipleLanguagesEnhancedModel_OmitsLocales()
+    {
+        // The enhanced (LLM Speech) model rejects several candidate locales with HTTP 400 and
+        // is multilingual by default, so the locales field must be dropped entirely.
+        _config.Language = "en-US, el-GR";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.DoesNotContain("\"locales\"", handler.Requests[0].Body);
+        Assert.Contains("\"enhancedMode\"", handler.Requests[0].Body);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_SingleLanguageEnhancedModel_StillSendsLocale()
+    {
+        _config.Language = "el-GR";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.Contains("""{"locales":["el-GR"]""", handler.Requests[0].Body);
+        Assert.Contains("\"enhancedMode\"", handler.Requests[0].Body);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" , ")]
+    public async Task TranscribeAsync_EmptyLanguage_OmitsLocales(string language)
+    {
+        _config.Language = language;
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -162,6 +205,20 @@ public sealed class AzureFoundryTranscriptionProviderTests
     }
 
     [Fact]
+    public async Task TranscribeAsync_MultipleLanguagesAndNoLocaleInResponse_LanguageIsNull()
+    {
+        // With several candidate locales, the configured value doesn't identify the spoken
+        // language, so without a service-reported locale the language must stay unknown.
+        _config.Language = "en-US, el-GR";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
+        var provider = CreateProvider(handler);
+
+        var result = await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
+
+        Assert.Null(result.Language);
+    }
+
+    [Fact]
     public async Task TranscribeAsync_Success_ReportsAudioDurationUsage()
     {
         var handler = new FakeHttpMessageHandler(
@@ -175,6 +232,33 @@ public sealed class AzureFoundryTranscriptionProviderTests
         Assert.Equal(2.5, record.DurationSeconds);
         Assert.Null(record.PromptTokens);
         Assert.Null(record.CompletionTokens);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_ErrorWithJsonBody_SurfacesServiceMessage()
+    {
+        var handler = new FakeHttpMessageHandler(
+            HttpStatusCode.BadRequest,
+            """{"error":{"code":"InvalidArgument","message":"The locale list is invalid."}}""");
+        var provider = CreateProvider(handler);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => provider.TranscribeAsync(OneSecondWav(), CancellationToken.None));
+
+        Assert.Contains("400", ex.Message);
+        Assert.Contains("The locale list is invalid.", ex.Message);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_ErrorWithNonJsonBody_SurfacesRawSnippet()
+    {
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, "definition malformed");
+        var provider = CreateProvider(handler);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => provider.TranscribeAsync(OneSecondWav(), CancellationToken.None));
+
+        Assert.Contains("definition malformed", ex.Message);
     }
 
     [Fact]

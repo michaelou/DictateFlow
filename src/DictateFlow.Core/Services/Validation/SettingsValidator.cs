@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Prompts;
@@ -11,11 +12,16 @@ namespace DictateFlow.Core.Services.Validation;
 /// inspected at the JSON level (Core does not know the provider config types), so the same
 /// rules apply to any registered provider: an active non-mock transcription/LLM provider must
 /// carry a non-empty <c>Endpoint</c> (absolute https), <c>ApiKey</c> and
-/// <c>DeploymentName</c>, and numeric fields present on the active section must be in range.
+/// <c>DeploymentName</c>, numeric fields present on the active section must be in range, and
+/// entries of a transcription <c>Language</c> field must look like BCP-47 locale tags.
 /// </summary>
 public sealed class SettingsValidator : ISettingsValidator
 {
     private const string MockProviderName = "Mock";
+
+    /// <summary>Lenient BCP-47 shape: a 2–3 letter language code plus optional subtags (en, en-US, zh-Hans-CN).</summary>
+    private static readonly Regex LocaleTagPattern =
+        new(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$", RegexOptions.Compiled);
 
     private readonly ProviderCatalog _catalog;
     private readonly IPromptModeStore _promptModeStore;
@@ -118,6 +124,33 @@ public sealed class SettingsValidator : ISettingsValidator
         if (config is not null)
         {
             ValidateNumericRanges(kind, section, config.Value, findings);
+
+            if (kind == ProviderKind.Transcription)
+            {
+                ValidateLanguages(section, config.Value, findings);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Warns about entries of a comma-separated <c>Language</c> field that don't look like
+    /// BCP-47 locale tags; empty is valid (auto-detect). A warning rather than an error: the
+    /// service, not the app, decides which tags it accepts.
+    /// </summary>
+    private static void ValidateLanguages(string section, JsonElement config, List<SettingsValidationError> findings)
+    {
+        var language = GetString(config, "Language");
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            return;
+        }
+
+        foreach (var locale in language.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!LocaleTagPattern.IsMatch(locale))
+            {
+                findings.Add(Warning(section, $"'{locale}' does not look like a BCP-47 locale tag (expected e.g. en-US)."));
+            }
         }
     }
 

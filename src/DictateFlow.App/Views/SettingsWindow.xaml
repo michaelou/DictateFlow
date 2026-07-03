@@ -187,10 +187,17 @@
                                  HorizontalAlignment="Left"
                                  Text="{Binding SpeechDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
 
-                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language" />
-                        <TextBox Width="120"
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Languages" />
+                        <TextBox Width="340"
                                  HorizontalAlignment="Left"
                                  Text="{Binding SpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Comma-separated locales, e.g. en-US, el-GR; leave empty for auto-detect. The standard model limits language detection to the listed locales; the enhanced model (deployment name set) is multilingual and auto-detects whenever more than one is listed." />
 
                         <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
                         <TextBox Width="80"

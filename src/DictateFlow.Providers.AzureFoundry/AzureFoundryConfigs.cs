@@ -19,7 +19,11 @@ public sealed class AzureFoundryTranscriptionConfig
     /// <summary>Gets or sets the model deployment name.</summary>
     public string DeploymentName { get; set; } = "";
 
-    /// <summary>Gets or sets the spoken language as a BCP-47 tag.</summary>
+    /// <summary>
+    /// Gets or sets the candidate spoken languages as comma-separated BCP-47 tags
+    /// (e.g. <c>en-US, el-GR</c>). Several tags restrict the service's language
+    /// identification to those languages; empty lets the service auto-detect.
+    /// </summary>
     public string Language { get; set; } = "en-US";
 
     /// <summary>Gets or sets the request timeout in seconds.</summary>

@@ -124,9 +124,10 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 
             if (!response.IsSuccessStatusCode)
             {
+                var detail = await ReadErrorDetailAsync(response, timeoutCts.Token).ConfigureAwait(false);
                 throw new ProviderException(
                     ProviderName,
-                    $"The speech service returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). Try again; if it persists, check the endpoint and deployment name in Settings → Speech.");
+                    $"The speech service returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}){detail}. Try again; if it persists, check the endpoint and deployment name in Settings → Speech.");
             }
 
             var json = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
@@ -203,7 +204,7 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     /// quoted — <see cref="MultipartFormDataContent"/> leaves them bare, which some multipart
     /// parsers reject. When a model (deployment) name is set it selects the enhanced model.
     /// </summary>
-    private static MultipartFormDataContent BuildContent(byte[] audioBytes, string language, string model)
+    private MultipartFormDataContent BuildContent(byte[] audioBytes, string language, string model)
     {
         var file = new ByteArrayContent(audioBytes);
         file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
@@ -213,12 +214,23 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
             FileName = "\"audio.wav\"",
         };
 
+        var enhanced = !string.IsNullOrWhiteSpace(model);
+        var locales = ParseLocales(language);
+
+        // The enhanced (LLM Speech) model rejects several candidate locales with HTTP 400; it
+        // is multilingual by default, so omitting locales lets it detect the language itself.
+        if (enhanced && locales is { Count: > 1 })
+        {
+            _logger.LogDebug(
+                "Enhanced model with {LocaleCount} configured languages: omitting locales, the model auto-detects",
+                locales.Count);
+            locales = null;
+        }
+
         var definitionJson = JsonSerializer.Serialize(
             new TranscribeDefinition(
-                string.IsNullOrWhiteSpace(language) ? null : [language.Trim()],
-                string.IsNullOrWhiteSpace(model)
-                    ? null
-                    : new EnhancedModeDefinition(true, model.Trim(), "verbatim")),
+                locales,
+                enhanced ? new EnhancedModeDefinition(true, model.Trim(), "verbatim") : null),
             DefinitionJsonOptions);
 
         var definition = new StringContent(definitionJson);
@@ -255,8 +267,11 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
         var duration = response!.DurationMilliseconds is { } ms
             ? ms / 1000.0
             : Math.Max(0, audioByteCount - WavHeaderBytes) / (double)BytesPerSecond;
+
+        // With several candidate locales (or auto-detect) the configured value is not the
+        // spoken language, so only the service-reported locale is trustworthy then.
         var language = response.Phrases?.FirstOrDefault()?.Locale
-            ?? (string.IsNullOrWhiteSpace(configuredLanguage) ? null : configuredLanguage);
+            ?? (ParseLocales(configuredLanguage) is [var single] ? single : null);
 
         _usageSink.Record(new UsageRecord(
             _timeProvider.GetUtcNow().UtcDateTime,
@@ -267,6 +282,58 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 
         _logger.LogDebug("Transcript received: {CharCount} characters, {DurationSeconds:F1} s of audio", text.Length, duration);
         return new TranscriptionResult(text, duration, language);
+    }
+
+    /// <summary>
+    /// Best-effort extraction of a short, human-readable detail from an error response body,
+    /// formatted for inline use in the exception message; empty when nothing usable is found.
+    /// </summary>
+    private static async Task<string> ReadErrorDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        string body;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+
+        // Azure errors are JSON like {"error":{"code":…,"message":…}}; fall back to the raw body.
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.Object
+                && error.TryGetProperty("message", out var message)
+                && message.ValueKind == JsonValueKind.String)
+            {
+                body = message.GetString() ?? body;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        body = body.Trim();
+        return body.Length switch
+        {
+            0 => "",
+            <= 300 => $" — {body}",
+            _ => $" — {body[..300]}…",
+        };
+    }
+
+    /// <summary>
+    /// Splits the configured language setting (comma-separated BCP-47 tags) into the candidate
+    /// locale list; <see langword="null"/> when empty, which lets the service auto-detect.
+    /// </summary>
+    private static IReadOnlyList<string>? ParseLocales(string language)
+    {
+        var locales = language.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return locales.Length == 0 ? null : locales;
     }
 
     /// <summary>Copies the audio stream (from its current position) into a byte array.</summary>

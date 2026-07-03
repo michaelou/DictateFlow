@@ -192,6 +192,45 @@ public sealed class SettingsValidatorTests
     }
 
     [Theory]
+    [InlineData("en-US")]
+    [InlineData("en-US, el-GR")]
+    [InlineData("zh-Hans-CN")]
+    [InlineData("")] // empty = auto-detect
+    public void WellFormedLanguages_HaveNoFindings(string language)
+    {
+        var settings = ValidAzureSettings();
+        settings.Providers.Transcription["AzureFoundry"] = JsonSerializer.SerializeToElement(new
+        {
+            Endpoint = "https://speech.example.com",
+            ApiKey = "key",
+            DeploymentName = "transcribe",
+            Language = language,
+        });
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Theory]
+    [InlineData("english", "english")]
+    [InlineData("en-US; el-GR", "en-US; el-GR")] // wrong separator
+    [InlineData("en-US, greek", "greek")]
+    public void MalformedLanguageEntry_IsSpeechWarning(string language, string badEntry)
+    {
+        var settings = ValidAzureSettings();
+        settings.Providers.Transcription["AzureFoundry"] = JsonSerializer.SerializeToElement(new
+        {
+            Endpoint = "https://speech.example.com",
+            ApiKey = "key",
+            DeploymentName = "transcribe",
+            Language = language,
+        });
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Speech");
+        Assert.Equal(SettingsValidationSeverity.Warning, finding.Severity);
+        Assert.Contains(badEntry, finding.Message);
+    }
+
+    [Theory]
     [InlineData("http://insecure.example.com")] // https required
     [InlineData("not-a-url")]
     public void NonHttpsEndpoint_IsError(string endpoint)
