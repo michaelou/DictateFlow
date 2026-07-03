@@ -9,6 +9,14 @@
         MinWidth="480"
         MinHeight="320"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <!-- Shows the item's Name in the closed selection box as well as the drop-down.
+             DisplayMemberPath alone leaves the themed ComboBox's SelectionBoxItemTemplate
+             null, so the closed box would fall back to the item's ToString(). -->
+        <DataTemplate x:Key="NameItemTemplate">
+            <TextBlock Text="{Binding Name}" />
+        </DataTemplate>
+    </Window.Resources>
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -76,7 +84,7 @@
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Microphone" />
                     <ComboBox Width="280"
                               HorizontalAlignment="Left"
-                              DisplayMemberPath="DisplayName"
+                              ItemTemplate="{StaticResource NameItemTemplate}"
                               ItemsSource="{Binding Microphones}"
                               SelectedItem="{Binding SelectedMicrophone}" />
 
@@ -362,7 +370,7 @@
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Active mode" />
                     <ComboBox Width="220"
                               HorizontalAlignment="Left"
-                              DisplayMemberPath="Name"
+                              ItemTemplate="{StaticResource NameItemTemplate}"
                               ItemsSource="{Binding PromptModes}"
                               SelectedItem="{Binding SelectedPromptMode}" />
 
@@ -412,7 +420,7 @@
                     <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                         <ComboBox Width="180"
                                   VerticalAlignment="Center"
-                                  DisplayMemberPath="Name"
+                                  ItemTemplate="{StaticResource NameItemTemplate}"
                                   ItemsSource="{Binding PromptModes}"
                                   SelectedItem="{Binding TesterMode}" />
                         <Button Width="88"

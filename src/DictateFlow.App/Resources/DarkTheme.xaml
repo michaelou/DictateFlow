@@ -697,20 +697,60 @@
                             Padding="{TemplateBinding Padding}">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <ContentPresenter Grid.Column="0"
+                            <!-- Check mark; Hidden (not Collapsed) so every item shares the same gutter. -->
+                            <TextBlock x:Name="check"
+                                       Grid.Column="0"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextBrush}"
+                                       Text="&#x2713;"
+                                       Visibility="Hidden" />
+                            <ContentPresenter Grid.Column="1"
                                               ContentSource="Header"
                                               VerticalAlignment="Center"
                                               RecognizesAccessKey="True" />
-                            <TextBlock Grid.Column="1"
+                            <TextBlock Grid.Column="2"
                                        Margin="16,0,0,0"
                                        Foreground="{StaticResource SecondaryTextBrush}"
                                        Text="{TemplateBinding InputGestureText}" />
+                            <!-- Submenu arrow; shown only for items that have children. -->
+                            <TextBlock x:Name="arrow"
+                                       Grid.Column="3"
+                                       Margin="16,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       Text="&#x203A;"
+                                       Visibility="Collapsed" />
+                            <Popup x:Name="subMenuPopup"
+                                   Placement="Right"
+                                   HorizontalOffset="-3"
+                                   VerticalOffset="-3"
+                                   IsOpen="{TemplateBinding IsSubmenuOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderStrongBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="3"
+                                        Padding="2">
+                                    <ItemsPresenter />
+                                </Border>
+                            </Popup>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="check" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="Role" Value="SubmenuHeader">
+                            <Setter TargetName="arrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource SelectionBrush}" />
                         </Trigger>

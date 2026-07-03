@@ -50,12 +50,18 @@ public sealed class TrayIconService : ITrayIconService
 
         _trayIcon.TrayBalloonTipClicked += OnBalloonTipClicked;
         _trayIcon.TrayBalloonTipClosed += OnBalloonTipClosed;
+        _trayIcon.TrayContextMenuOpen += OnContextMenuOpen;
         _settingsService.SettingsChanged += OnSettingsChanged;
 
         UpdateTooltip(_settingsService.Current);
+        _viewModel.RefreshPromptModes();
         _trayIcon.ForceCreate();
         _logger.LogDebug("Tray icon created");
     }
+
+    /// <summary>Rebuilds the "Prompt Mode" submenu just before it is shown, so external edits appear.</summary>
+    private void OnContextMenuOpen(object sender, System.Windows.RoutedEventArgs e)
+        => _viewModel.RefreshPromptModes();
 
     /// <summary>Keeps the tooltip in sync with the active prompt mode; save events may arrive off the UI thread.</summary>
     private void OnSettingsChanged(object? sender, AppSettings settings)
@@ -138,6 +144,7 @@ public sealed class TrayIconService : ITrayIconService
         {
             _trayIcon.TrayBalloonTipClicked -= OnBalloonTipClicked;
             _trayIcon.TrayBalloonTipClosed -= OnBalloonTipClosed;
+            _trayIcon.TrayContextMenuOpen -= OnContextMenuOpen;
         }
 
         _trayIcon?.Dispose();
