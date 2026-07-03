@@ -117,6 +117,13 @@ public sealed class RecordingSettings
 
     /// <summary>Gets or sets the number of seconds of silence after which recording stops automatically.</summary>
     public int SilenceTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether transcription starts while recording is still
+    /// in progress, showing the partial transcript on the overlay. Only takes effect when the
+    /// active transcription provider supports streaming; otherwise the standard workflow runs.
+    /// </summary>
+    public bool EnableStreamingTranscription { get; set; }
 }
 
 /// <summary>

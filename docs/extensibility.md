@@ -4,7 +4,7 @@ DictateFlow has three replaceable provider slots, one per pipeline stage:
 
 | Kind | Interface | Built-in providers |
 |---|---|---|
-| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry` |
+| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry`, `AzureSpeech`, `WhisperCpp` |
 | `Llm` | `ILLMProvider` | `Mock`, `AzureFoundry` |
 | `Output` | `IOutputProvider` | `ClipboardPaste`, `SimulatedKeyboard`, `Null` (sample) |
 
@@ -40,6 +40,36 @@ Provider guidelines:
   timeout). Its message is shown to the user; pass `isConfigurationError: true` when the fix
   lives in Settings. Never let raw transport exceptions escape.
 - Honor the `CancellationToken` on every awaited call.
+
+### Optional: streaming transcription
+
+A transcription provider can additionally implement `IStreamingTranscriptionProvider` to
+transcribe while the user is still speaking:
+
+```csharp
+public interface IStreamingTranscriptionProvider
+{
+    IAsyncEnumerable<TranscriptionUpdate> TranscribeStreamingAsync(
+        IAsyncEnumerable<AudioChunk> audio,
+        CancellationToken cancellationToken);
+}
+```
+
+The capability is detected at runtime — no extra registration. When **Enable streaming
+transcription** is on in Settings and the active provider implements the interface, each
+recording feeds live 16 kHz/16-bit/mono PCM chunks to `TranscribeStreamingAsync` and shows
+the partial transcript on the overlay; the update yielded with `IsFinal = true` (or the last
+one) becomes the transcript handed to the rest of the pipeline, and the pipeline's own
+transcription stage is skipped. Everything downstream (LLM enhancement, history, output) is
+unchanged and runs exactly once on the final text.
+
+Streaming is strictly an optimization: if the session throws, times out or yields nothing,
+the completed WAV capture is transcribed through the regular `TranscribeAsync` path instead,
+so a provider never has to implement its own fallback. Providers that only implement
+`ITranscriptionProvider` keep working untouched. Two built-in providers implement the
+interface: `AzureSpeech` (real-time recognition through the Azure Speech SDK) and `Mock`
+(revealing its canned text word by word, so the streaming flow is demoable without any
+cloud service).
 
 ## 2. Register it (the one line)
 

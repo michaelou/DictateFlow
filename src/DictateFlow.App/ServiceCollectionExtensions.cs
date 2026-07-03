@@ -17,6 +17,7 @@ using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,6 +105,11 @@ public static class ServiceCollectionExtensions
         services.AddTranscriptionProvider<MockTranscriptionProvider>(
             MockTranscriptionProvider.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<AzureFoundryTranscriptionProvider>(AzureFoundryProviders.RegistrationName);
+        // Azure real-time speech (streaming-capable, issue #20). Registered with
+        // requiresConnection: false because it has no DeploymentName — the generic connection
+        // validation doesn't fit; the provider validates its endpoint/key itself per call.
+        services.AddTranscriptionProvider<AzureSpeechTranscriptionProvider>(
+            AzureSpeechProviders.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(
             WhisperCppProviders.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName, requiresConnection: false);
@@ -112,6 +118,10 @@ public static class ServiceCollectionExtensions
         services.AddOutputProvider<SimulatedKeyboardOutputProvider>(OutputProviderNames.SimulatedKeyboard);
         // The sample provider proving the extensibility claim: this line is its entire integration.
         services.AddOutputProvider<NullOutputProvider>(NullOutputProvider.RegistrationName);
+
+        // Streaming transcription (issue #20): starts a session per recording when enabled in
+        // settings and the active provider implements IStreamingTranscriptionProvider.
+        services.AddSingleton<IStreamingTranscriptionCoordinator, StreamingTranscriptionCoordinator>();
 
         // Registry-backed defaults: consumers keep injecting the plain provider interfaces
         // and always get the provider that is active in settings at call time.

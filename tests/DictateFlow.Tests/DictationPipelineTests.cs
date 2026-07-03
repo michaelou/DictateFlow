@@ -68,6 +68,31 @@ public sealed class DictationPipelineTests
         => new(new MemoryStream(new byte[44 + 32000]), "notepad", 1234);
 
     [Fact]
+    public async Task RunAsync_StreamedTranscript_SkipsTranscriptionAndUsesTheSuppliedText()
+    {
+        var request = CreateRequest() with { Transcript = "streamed transcript" };
+
+        var result = await CreatePipeline().RunAsync(request, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("[enhanced] streamed transcript", result.FinalText);
+        Assert.Equal("streamed transcript", result.RawTranscript);
+        _transcription.Verify(
+            t => t.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(["llm", "gate", "history", "output"], _callOrder);
+    }
+
+    [Fact]
+    public async Task RunAsync_StreamedTranscript_LlmStillRunsExactlyOnce()
+    {
+        var request = CreateRequest() with { Transcript = "streamed transcript" };
+
+        await CreatePipeline().RunAsync(request, CancellationToken.None);
+
+        _llm.Verify(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task RunAsync_HappyPath_RunsStepsInOrder()
     {
         var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);

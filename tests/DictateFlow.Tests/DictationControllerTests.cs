@@ -2,6 +2,7 @@ using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Pipeline;
+using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -9,8 +10,9 @@ namespace DictateFlow.Tests;
 
 /// <summary>
 /// Tests for <see cref="DictationController"/>: recording lifecycle, hotkey handling,
-/// silence auto-stop, and the hand-off of completed captures to <see cref="IDictationPipeline"/>.
-/// The pipeline's internal behavior is covered by <see cref="DictationPipelineTests"/>.
+/// silence auto-stop, streaming-transcription orchestration, and the hand-off of completed
+/// captures to <see cref="IDictationPipeline"/>. The pipeline's internal behavior is covered
+/// by <see cref="DictationPipelineTests"/>.
 /// </summary>
 public sealed class DictationControllerTests
 {
@@ -18,6 +20,7 @@ public sealed class DictationControllerTests
     private readonly Mock<IHotkeyService> _hotkeys = new();
     private readonly Mock<IRecordingOverlay> _overlay = new();
     private readonly Mock<IDictationPipeline> _pipeline = new();
+    private readonly Mock<IStreamingTranscriptionCoordinator> _streaming = new();
     private readonly Mock<IForegroundAppService> _foregroundApp = new();
     private readonly Mock<ISettingsService> _settings = new();
     private readonly TestTimeProvider _time = new();
@@ -29,6 +32,8 @@ public sealed class DictationControllerTests
         _recorder.Setup(r => r.StartAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         // Header-only capture: contains no audio, so the pipeline is skipped by default.
         _recorder.Setup(r => r.StopAsync()).ReturnsAsync(() => new MemoryStream(new byte[44]));
+        // Streaming does not apply by default — the standard workflow runs.
+        _streaming.Setup(s => s.TryBegin()).Returns((IStreamingTranscriptionSession?)null);
         _foregroundApp.SetupGet(f => f.LastCaptured).Returns("notepad");
         _foregroundApp.SetupGet(f => f.LastCapturedWindowHandle).Returns(1234);
         _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
@@ -36,8 +41,17 @@ public sealed class DictationControllerTests
     }
 
     private DictationController CreateController()
-        => new(_recorder.Object, _hotkeys.Object, _overlay.Object, _pipeline.Object,
+        => new(_recorder.Object, _hotkeys.Object, _overlay.Object, _pipeline.Object, _streaming.Object,
             _foregroundApp.Object, _settings.Object, _time, Mock.Of<ILogger<DictationController>>());
+
+    /// <summary>Makes the coordinator hand out a streaming session that completes with <paramref name="finalTranscript"/>.</summary>
+    private Mock<IStreamingTranscriptionSession> SetupStreamingSession(string? finalTranscript)
+    {
+        var session = new Mock<IStreamingTranscriptionSession>();
+        session.Setup(s => s.CompleteAsync()).ReturnsAsync(finalTranscript);
+        _streaming.Setup(s => s.TryBegin()).Returns(session.Object);
+        return session;
+    }
 
     /// <summary>Makes the recorder return a capture that contains audio beyond the WAV header.</summary>
     private void SetupCaptureWithAudio(int audioBytes = 32000)
@@ -362,5 +376,142 @@ public sealed class DictationControllerTests
         _recorder.Raise(r => r.LevelChanged += null, _recorder.Object, 0.42f);
 
         _overlay.Verify(o => o.UpdateLevel(0.42f), Times.Once);
+    }
+
+    [Fact]
+    public async Task Streaming_SessionTranscript_ReachesPipelineAndSkipsNothingElse()
+    {
+        SetupCaptureWithAudio();
+        var session = SetupStreamingSession("streamed transcript");
+        PipelineRequest? request = null;
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<PipelineRequest, CancellationToken>((r, _) => request = r)
+            .ReturnsAsync(new PipelineResult(true, "final text", "streamed transcript", null));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.NotNull(request);
+        Assert.Equal("streamed transcript", request!.Transcript);
+        Assert.Same(controller.LastCapture, request.Audio); // the capture still travels for fallback/debugging
+        session.Verify(s => s.CompleteAsync(), Times.Once);
+        session.Verify(s => s.DisposeAsync(), Times.Once);
+        _overlay.Verify(o => o.ShowSuccess(), Times.Once);
+    }
+
+    [Fact]
+    public async Task Streaming_NotApplicable_RunsStandardWorkflow()
+    {
+        SetupCaptureWithAudio();
+        PipelineRequest? request = null;
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<PipelineRequest, CancellationToken>((r, _) => request = r)
+            .ReturnsAsync(new PipelineResult(true, "final text", "raw transcript", null));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.NotNull(request);
+        Assert.Null(request!.Transcript); // the pipeline transcribes the capture itself
+    }
+
+    [Fact]
+    public async Task Streaming_SessionFails_FallsBackToStandardTranscription()
+    {
+        SetupCaptureWithAudio();
+        var session = SetupStreamingSession(finalTranscript: null); // null = streaming failed
+        PipelineRequest? request = null;
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<PipelineRequest, CancellationToken>((r, _) => request = r)
+            .ReturnsAsync(new PipelineResult(true, "final text", "raw transcript", null));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.NotNull(request);
+        Assert.Null(request!.Transcript); // fallback: the pipeline transcribes the capture
+        session.Verify(s => s.DisposeAsync(), Times.Once);
+        _overlay.Verify(o => o.ShowSuccess(), Times.Once); // the dictation still succeeds
+    }
+
+    [Fact]
+    public async Task Streaming_CompleteThrows_FallsBackToStandardTranscription()
+    {
+        SetupCaptureWithAudio();
+        var session = SetupStreamingSession("unused");
+        session.Setup(s => s.CompleteAsync()).ThrowsAsync(new InvalidOperationException("stream broke"));
+        PipelineRequest? request = null;
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<PipelineRequest, CancellationToken>((r, _) => request = r)
+            .ReturnsAsync(new PipelineResult(true, "final text", "raw transcript", null));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync(); // must not throw
+
+        Assert.NotNull(request);
+        Assert.Null(request!.Transcript);
+        session.Verify(s => s.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task Streaming_ChunksAreForwardedToTheSessionOnlyWhileRecording()
+    {
+        SetupCaptureWithAudio();
+        var session = SetupStreamingSession("streamed transcript");
+        var chunk = new AudioChunk(new byte[] { 1, 2 });
+        var controller = CreateController();
+
+        _recorder.Raise(r => r.ChunkCaptured += null, _recorder.Object, chunk);
+        session.Verify(s => s.AddAudio(It.IsAny<AudioChunk>()), Times.Never); // not recording yet
+
+        await controller.StartRecordingAsync();
+        _recorder.Raise(r => r.ChunkCaptured += null, _recorder.Object, chunk);
+        session.Verify(s => s.AddAudio(chunk), Times.Once);
+
+        await controller.StopRecordingAsync();
+        _recorder.Raise(r => r.ChunkCaptured += null, _recorder.Object, chunk);
+        session.Verify(s => s.AddAudio(It.IsAny<AudioChunk>()), Times.Once); // detached after stop
+    }
+
+    [Fact]
+    public async Task Streaming_PartialTranscripts_ReachTheOverlay()
+    {
+        var session = SetupStreamingSession("streamed transcript");
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        session.Raise(s => s.PartialTranscriptChanged += null, session.Object, "hello wor");
+
+        _overlay.Verify(o => o.UpdateTranscript("hello wor"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Streaming_HeaderOnlyCapture_DisposesSessionAndSkipsPipeline()
+    {
+        var session = SetupStreamingSession("streamed transcript");
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        session.Verify(s => s.DisposeAsync(), Times.Once);
+        session.Verify(s => s.CompleteAsync(), Times.Never);
+        _pipeline.Verify(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Streaming_CoordinatorThrows_RecordingStillStarts()
+    {
+        _streaming.Setup(s => s.TryBegin()).Throws(new InvalidOperationException("boom"));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+
+        Assert.True(controller.IsRecording);
+        _overlay.Verify(o => o.ShowListening(), Times.Once);
     }
 }

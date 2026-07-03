@@ -1,5 +1,6 @@
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Pipeline;
+using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Core.Services.Audio;
@@ -36,6 +37,7 @@ public sealed class DictationController : IDictationController, IDisposable
     private readonly IHotkeyService _hotkeyService;
     private readonly IRecordingOverlay _overlay;
     private readonly IDictationPipeline _pipeline;
+    private readonly IStreamingTranscriptionCoordinator _streamingCoordinator;
     private readonly IForegroundAppService _foregroundAppService;
     private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
@@ -44,12 +46,14 @@ public sealed class DictationController : IDictationController, IDisposable
 
     private bool _isRecording;
     private long _lastLoudTimestamp;
+    private IStreamingTranscriptionSession? _streamingSession;
 
     /// <summary>Initializes a new instance of the <see cref="DictationController"/> class.</summary>
     /// <param name="recorder">Captures microphone audio.</param>
     /// <param name="hotkeyService">Raises global hotkey events; re-armed when settings change.</param>
     /// <param name="overlay">The on-screen recording indicator.</param>
     /// <param name="pipeline">Runs each completed capture through transcription, enhancement, history and output.</param>
+    /// <param name="streamingCoordinator">Starts streaming transcription when enabled and supported by the active provider.</param>
     /// <param name="foregroundAppService">Captures the target application at record-start.</param>
     /// <param name="settingsService">Supplies recording mode, hotkey and silence timeout.</param>
     /// <param name="timeProvider">Measures silence duration (replaceable in tests).</param>
@@ -59,6 +63,7 @@ public sealed class DictationController : IDictationController, IDisposable
         IHotkeyService hotkeyService,
         IRecordingOverlay overlay,
         IDictationPipeline pipeline,
+        IStreamingTranscriptionCoordinator streamingCoordinator,
         IForegroundAppService foregroundAppService,
         ISettingsService settingsService,
         TimeProvider timeProvider,
@@ -68,6 +73,7 @@ public sealed class DictationController : IDictationController, IDisposable
         _hotkeyService = hotkeyService;
         _overlay = overlay;
         _pipeline = pipeline;
+        _streamingCoordinator = streamingCoordinator;
         _foregroundAppService = foregroundAppService;
         _settingsService = settingsService;
         _timeProvider = timeProvider;
@@ -77,6 +83,7 @@ public sealed class DictationController : IDictationController, IDisposable
         _hotkeyService.PushToTalkPressed += OnPushToTalkPressed;
         _hotkeyService.PushToTalkReleased += OnPushToTalkReleased;
         _recorder.LevelChanged += OnLevelChanged;
+        _recorder.ChunkCaptured += OnChunkCaptured;
         _settingsService.SettingsChanged += OnSettingsChanged;
     }
 
@@ -120,6 +127,7 @@ public sealed class DictationController : IDictationController, IDisposable
         try
         {
             await _recorder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            BeginStreamingSession();
             _overlay.ShowListening();
             _logger.LogInformation("Recording started");
         }
@@ -132,6 +140,87 @@ public sealed class DictationController : IDictationController, IDisposable
 
             _overlay.Hide();
             _logger.LogError(ex, "Failed to start recording");
+        }
+    }
+
+    /// <summary>
+    /// Starts streaming transcription for the new recording when it applies (see
+    /// <see cref="IStreamingTranscriptionCoordinator.TryBegin"/>). Never throws — streaming
+    /// is an optimization and a failure to start it must not take the recording down.
+    /// </summary>
+    private void BeginStreamingSession()
+    {
+        try
+        {
+            var session = _streamingCoordinator.TryBegin();
+            if (session is null)
+            {
+                return;
+            }
+
+            session.PartialTranscriptChanged += OnPartialTranscriptChanged;
+            lock (_gate)
+            {
+                _streamingSession = session;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start streaming transcription; using the standard workflow");
+        }
+    }
+
+    /// <summary>
+    /// Detaches the current streaming session, if any, so no further audio or events reach
+    /// it. The caller owns completing/disposing the returned session.
+    /// </summary>
+    private IStreamingTranscriptionSession? TakeStreamingSession()
+    {
+        IStreamingTranscriptionSession? session;
+        lock (_gate)
+        {
+            session = _streamingSession;
+            _streamingSession = null;
+        }
+
+        if (session is not null)
+        {
+            session.PartialTranscriptChanged -= OnPartialTranscriptChanged;
+        }
+
+        return session;
+    }
+
+    /// <summary>
+    /// Completes the streaming session and returns its final transcript, or
+    /// <see langword="null"/> when there was no session or it failed — the standard
+    /// (non-streaming) transcription then runs on the completed capture as the fallback.
+    /// </summary>
+    private async Task<string?> FinishStreamingSessionAsync(IStreamingTranscriptionSession? session)
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var transcript = await session.CompleteAsync().ConfigureAwait(false);
+            if (transcript is null)
+            {
+                _logger.LogInformation("Streaming transcription produced no result; falling back to standard transcription");
+            }
+
+            return transcript;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Streaming transcription failed; falling back to standard transcription");
+            return null;
+        }
+        finally
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -149,6 +238,8 @@ public sealed class DictationController : IDictationController, IDisposable
             _isRecording = false;
         }
 
+        var streamingSession = TakeStreamingSession();
+
         Stream capture;
         try
         {
@@ -165,6 +256,11 @@ public sealed class DictationController : IDictationController, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to stop recording");
+            if (streamingSession is not null)
+            {
+                await streamingSession.DisposeAsync().ConfigureAwait(false);
+            }
+
             _overlay.Hide();
             return;
         }
@@ -172,26 +268,41 @@ public sealed class DictationController : IDictationController, IDisposable
         if (capture.Length <= WavHeaderBytes)
         {
             _logger.LogDebug("Capture contains no audio; skipping the pipeline");
+            if (streamingSession is not null)
+            {
+                await streamingSession.DisposeAsync().ConfigureAwait(false);
+            }
+
             _overlay.Hide();
             return;
         }
 
-        await ProcessCaptureAsync(capture).ConfigureAwait(false);
+        // Finalizing the streamed transcript can take a moment; show Processing already so
+        // the overlay never sits in Listening after the recording has stopped.
+        _overlay.ShowProcessing();
+        var streamedTranscript = await FinishStreamingSessionAsync(streamingSession).ConfigureAwait(false);
+
+        await ProcessCaptureAsync(capture, streamedTranscript).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Runs a completed capture through the dictation pipeline. The overlay stays in
-    /// Processing until the pipeline returns, then shows Success (auto-hidden), hides on a
-    /// user cancel, or shows Error (auto-hidden) and raises <see cref="DictationFailed"/>.
+    /// Runs a completed capture through the dictation pipeline. The caller has already put
+    /// the overlay into Processing; it stays there until the pipeline returns, then shows
+    /// Success (auto-hidden), hides on a user cancel, or shows Error (auto-hidden) and
+    /// raises <see cref="DictationFailed"/>.
     /// </summary>
-    private async Task ProcessCaptureAsync(Stream capture)
+    /// <param name="capture">The completed WAV capture.</param>
+    /// <param name="streamedTranscript">
+    /// The final transcript from streaming transcription, or <see langword="null"/> to let
+    /// the pipeline transcribe the capture itself.
+    /// </param>
+    private async Task ProcessCaptureAsync(Stream capture, string? streamedTranscript)
     {
-        _overlay.ShowProcessing();
-
         var request = new PipelineRequest(
             capture,
             _foregroundAppService.LastCaptured,
-            _foregroundAppService.LastCapturedWindowHandle);
+            _foregroundAppService.LastCapturedWindowHandle,
+            streamedTranscript);
 
         PipelineResult result;
         try
@@ -252,7 +363,14 @@ public sealed class DictationController : IDictationController, IDisposable
         _hotkeyService.PushToTalkPressed -= OnPushToTalkPressed;
         _hotkeyService.PushToTalkReleased -= OnPushToTalkReleased;
         _recorder.LevelChanged -= OnLevelChanged;
+        _recorder.ChunkCaptured -= OnChunkCaptured;
         _settingsService.SettingsChanged -= OnSettingsChanged;
+
+        var session = TakeStreamingSession();
+        if (session is not null)
+        {
+            RunGuarded(() => session.DisposeAsync().AsTask());
+        }
 
         LastCapture?.Dispose();
         LastCapture = null;
@@ -278,6 +396,22 @@ public sealed class DictationController : IDictationController, IDisposable
             _logger.LogError(ex, "Failed to apply hotkey settings");
         }
     }
+
+    /// <summary>Feeds live audio to the streaming session, when one is running.</summary>
+    private void OnChunkCaptured(object? sender, AudioChunk chunk)
+    {
+        IStreamingTranscriptionSession? session;
+        lock (_gate)
+        {
+            session = _streamingSession;
+        }
+
+        session?.AddAudio(chunk);
+    }
+
+    /// <summary>Shows the latest partial transcript on the overlay while listening.</summary>
+    private void OnPartialTranscriptChanged(object? sender, string text)
+        => _overlay.UpdateTranscript(text);
 
     private void OnLevelChanged(object? sender, float level)
     {

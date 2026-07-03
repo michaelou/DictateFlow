@@ -1,3 +1,4 @@
+using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
@@ -48,6 +49,59 @@ public sealed class MockTranscriptionProviderTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => _provider.TranscribeAsync(new MemoryStream(), cts.Token));
+    }
+
+    [Fact]
+    public async Task TranscribeStreamingAsync_EndsWithTheFullTextAsFinal()
+    {
+        _config.Text = "one two three";
+
+        var updates = new List<TranscriptionUpdate>();
+        await foreach (var update in _provider.TranscribeStreamingAsync(EmptyAudio(), CancellationToken.None))
+        {
+            updates.Add(update);
+        }
+
+        Assert.NotEmpty(updates);
+        var final = updates[^1];
+        Assert.True(final.IsFinal);
+        Assert.Equal("one two three", final.Text);
+        Assert.All(updates[..^1], u => Assert.False(u.IsFinal));
+    }
+
+    [Fact]
+    public async Task TranscribeStreamingAsync_PartialUpdatesGrowTowardTheFullText()
+    {
+        _config.Text = "alpha beta gamma";
+
+        var updates = new List<TranscriptionUpdate>();
+        await foreach (var update in _provider.TranscribeStreamingAsync(
+            SlowAudio(chunks: 6, intervalMs: 250), CancellationToken.None))
+        {
+            updates.Add(update);
+        }
+
+        var partials = updates.Where(u => !u.IsFinal).Select(u => u.Text).ToList();
+        Assert.NotEmpty(partials); // audio ran long enough for at least one partial
+        Assert.Equal("alpha", partials[0]);
+        Assert.All(partials, p => Assert.StartsWith(p, "alpha beta gamma"));
+    }
+
+    /// <summary>An audio sequence that completes immediately, like a recording stopped at once.</summary>
+    private static async IAsyncEnumerable<AudioChunk> EmptyAudio()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
+    /// <summary>An audio sequence delivering <paramref name="chunks"/> chunks, one per interval.</summary>
+    private static async IAsyncEnumerable<AudioChunk> SlowAudio(int chunks, int intervalMs)
+    {
+        for (var i = 0; i < chunks; i++)
+        {
+            await Task.Delay(intervalMs);
+            yield return new AudioChunk(new byte[320]);
+        }
     }
 }
 

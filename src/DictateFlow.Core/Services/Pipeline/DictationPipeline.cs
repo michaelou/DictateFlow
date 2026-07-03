@@ -88,18 +88,29 @@ public sealed class DictationPipeline : IDictationPipeline
         PipelineRequest request, StageTimings timings, CancellationToken cancellationToken)
     {
         // 1. Transcribe. A failure here fails the whole run — there is nothing to fall back to.
+        //    A request carrying a streamed transcript skips the stage: the text was already
+        //    produced while recording.
         string transcript;
-        try
+        if (request.Transcript is not null)
         {
-            transcript = await TranscribeAsync(request.Audio, timings, cancellationToken).ConfigureAwait(false);
+            transcript = request.Transcript;
+            _logger.LogDebug(
+                "Transcription step skipped: streamed transcript supplied ({CharCount} characters)", transcript.Length);
         }
-        catch (Exception ex)
+        else
         {
-            // Providers curate their messages; anything else stays out of user-facing text.
-            var failure = ex as ProviderException
-                ?? new ProviderException("Transcription", "Transcription failed unexpectedly — see the log for details.", ex);
-            _logger.LogError(ex, "Pipeline failed at transcription ({ProviderName})", failure.ProviderName);
-            return new PipelineResult(false, null, null, PresentableMessage(failure), failure.IsConfigurationError);
+            try
+            {
+                transcript = await TranscribeAsync(request.Audio, timings, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Providers curate their messages; anything else stays out of user-facing text.
+                var failure = ex as ProviderException
+                    ?? new ProviderException("Transcription", "Transcription failed unexpectedly — see the log for details.", ex);
+                _logger.LogError(ex, "Pipeline failed at transcription ({ProviderName})", failure.ProviderName);
+                return new PipelineResult(false, null, null, PresentableMessage(failure), failure.IsConfigurationError);
+            }
         }
 
         // 2. Enhance. A failure degrades to the raw transcript with a warning for the gate.

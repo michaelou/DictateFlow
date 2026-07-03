@@ -63,6 +63,8 @@ src/
   DictateFlow.Core/                    # Interfaces, models, pipeline abstractions, provider registry, settings models (no WPF/vendor references)
   DictateFlow.App/                     # WPF tray app (net10.0-windows): views, viewmodels, Windows-specific services, DI bootstrap
   DictateFlow.Providers.AzureFoundry/  # Azure AI Foundry speech + LLM providers
+  DictateFlow.Providers.AzureSpeech/   # Azure real-time speech provider (streaming transcription via the Speech SDK)
+  DictateFlow.Providers.WhisperCpp/    # Local whisper.cpp transcription provider (fully offline)
 samples/
   DictateFlow.Samples.NullOutput/      # Minimal output provider proving the one-class-one-line extensibility claim
 tests/
