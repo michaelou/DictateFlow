@@ -13,6 +13,7 @@ using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Transfer;
+using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
@@ -58,6 +59,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Core.Services.Diagnostics.IDiagnosticsService, Core.Services.Diagnostics.DiagnosticsService>();
         services.AddSingleton<IRunKeyStore, RegistryRunKeyStore>();
         services.AddSingleton<IStartupRegistration, StartupRegistration>();
+
+        // Manual "Check for updates" against the GitHub releases API. A short timeout keeps a
+        // slow or unreachable network from hanging the click; failures come back as a message.
+        services.AddHttpClient<IUpdateService, GitHubUpdateService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("DictateFlow-UpdateCheck");
+        });
 
         services.AddSingleton<IWindowService, WindowService>();
         services.AddSingleton<IShutdownService, ShutdownService>();

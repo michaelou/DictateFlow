@@ -5,6 +5,16 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Resources\appicon.ico</ApplicationIcon>
+    <!-- Ships as DictateFlow.exe (not DictateFlow.App.exe) so shortcuts and the installer read cleanly. -->
+    <AssemblyName>DictateFlow</AssemblyName>
+    <Product>DictateFlow</Product>
+    <Company>Belugga</Company>
+    <Authors>Belugga</Authors>
+    <!-- Default dev version; scripts/release.ps1 overrides it with -p:Version=<release version>. -->
+    <Version>0.1.0</Version>
+    <!-- Keep the informational version equal to <Version> (no +commit-hash suffix) so the
+         version shown in Settings › Diagnostics and used by the update check is clean. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +27,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />

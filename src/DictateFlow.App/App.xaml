@@ -31,6 +31,7 @@
                         <MenuItem Header="History" Command="{Binding OpenHistoryCommand}" />
                         <MenuItem Header="Cost Dashboard" Command="{Binding OpenCostDashboardCommand}" />
                         <Separator />
+                        <MenuItem Header="Check for Updates…" Command="{Binding CheckForUpdatesCommand}" />
                         <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
                     </ContextMenu>
                 </tray:TaskbarIcon.ContextMenu>

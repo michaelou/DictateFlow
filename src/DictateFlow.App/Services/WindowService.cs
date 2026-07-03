@@ -3,6 +3,7 @@ using DictateFlow.App.ViewModels;
 using DictateFlow.App.Views;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Updates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +21,7 @@ public sealed class WindowService : IWindowService
     private SettingsWindow? _settingsWindow;
     private HistoryWindow? _historyWindow;
     private CostDashboardWindow? _costDashboardWindow;
+    private UpdateWindow? _updateWindow;
 
     /// <summary>Initializes a new instance of the <see cref="WindowService"/> class.</summary>
     /// <param name="serviceProvider">Used as a factory for window view models.</param>
@@ -83,6 +85,22 @@ public sealed class WindowService : IWindowService
         window.Show();
         window.Activate();
         viewModel.RefreshCommand.Execute(null);
+    }
+
+    /// <inheritdoc />
+    public void ShowUpdateWindow(UpdateCheckResult result)
+    {
+        // A fresh result supersedes any dialog already open, so close and rebuild it.
+        _updateWindow?.Close();
+
+        var viewModel = new UpdateViewModel(result, _serviceProvider.GetService<ILogger<UpdateViewModel>>());
+        var window = new UpdateWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Closed += (_, _) => _updateWindow = null;
+
+        _updateWindow = window;
+        window.Show();
+        window.Activate();
     }
 
     /// <summary>

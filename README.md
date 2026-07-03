@@ -35,6 +35,7 @@ The app starts with no window and puts a **DictateFlow icon in the system tray**
 - **Settings** — recording, providers, prompts, dictionary, application rules, output, history, pricing, backup (import/export) and diagnostics
 - **History** — searchable list of past dictations (copy, delete, clear all)
 - **Cost Dashboard** — estimated speech/LLM costs for today, this month and lifetime
+- **Check for Updates** — compares the installed version with the latest GitHub release (manual; never auto-downloads)
 - **Exit** — shuts the app down cleanly
 
 ## Test
@@ -42,6 +43,17 @@ The app starts with no window and puts a **DictateFlow icon in the system tray**
 ```powershell
 dotnet test
 ```
+
+## Release
+
+Packaging (installer + portable ZIP) and publishing a GitHub release is a manual local
+process driven by [`scripts/release.ps1`](scripts/release.ps1):
+
+```powershell
+.\scripts\release.ps1 -Version 0.1.0
+```
+
+See [docs/release.md](docs/release.md) for prerequisites and details.
 
 ## Solution layout
 

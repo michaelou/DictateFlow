@@ -5,6 +5,7 @@ using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Updates;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App.ViewModels;
@@ -19,6 +20,7 @@ public partial class TrayViewModel : ObservableObject
     private readonly IDictationController _dictationController;
     private readonly ISettingsService _settingsService;
     private readonly IPromptModeStore _promptModeStore;
+    private readonly IUpdateService _updateService;
     private readonly ILogger<TrayViewModel> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="TrayViewModel"/> class.</summary>
@@ -27,6 +29,7 @@ public partial class TrayViewModel : ObservableObject
     /// <param name="dictationController">Starts and stops dictation recordings.</param>
     /// <param name="settingsService">Reads and persists the active prompt mode.</param>
     /// <param name="promptModeStore">Supplies the available prompt modes.</param>
+    /// <param name="updateService">Checks GitHub for a newer release.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public TrayViewModel(
         IWindowService windowService,
@@ -34,6 +37,7 @@ public partial class TrayViewModel : ObservableObject
         IDictationController dictationController,
         ISettingsService settingsService,
         IPromptModeStore promptModeStore,
+        IUpdateService updateService,
         ILogger<TrayViewModel> logger)
     {
         _windowService = windowService;
@@ -41,6 +45,7 @@ public partial class TrayViewModel : ObservableObject
         _dictationController = dictationController;
         _settingsService = settingsService;
         _promptModeStore = promptModeStore;
+        _updateService = updateService;
         _logger = logger;
     }
 
@@ -114,6 +119,18 @@ public partial class TrayViewModel : ObservableObject
     [RelayCommand]
     private void OpenCostDashboard()
         => _windowService.ShowCostDashboardWindow();
+
+    /// <summary>
+    /// Checks GitHub for a newer release and shows the result dialog. The check itself never
+    /// throws; offline/network failures are shown to the user as a graceful message.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        _logger.LogInformation("Checking for updates from tray menu");
+        var result = await _updateService.CheckForUpdatesAsync();
+        _windowService.ShowUpdateWindow(result);
+    }
 
     /// <summary>Shuts the application down cleanly.</summary>
     [RelayCommand]
