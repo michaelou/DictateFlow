@@ -16,50 +16,74 @@
             Background="#DD202020"
             CornerRadius="10"
             IsHitTestVisible="False">
-        <StackPanel Orientation="Horizontal">
-            <TextBlock FontSize="14"
-                       Foreground="White"
+        <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock FontSize="14"
+                           Foreground="White"
+                           MaxWidth="420"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="🎤 Listening…" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}">
+                                    <Setter Property="Text" Value="🧠 Processing…" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Success}">
+                                    <Setter Property="Text" Value="✓ Pasted" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Error}">
+                                    <Setter Property="Text" Value="{Binding ErrorDisplayText}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <ProgressBar Width="90"
+                             Height="6"
+                             Margin="12,0,0,0"
+                             Minimum="0"
+                             Maximum="1"
+                             Value="{Binding Level, Mode=OneWay}"
+                             BorderThickness="0"
+                             Background="#33FFFFFF"
+                             Foreground="#FF4CC38A"
+                             VerticalAlignment="Center">
+                    <ProgressBar.Style>
+                        <Style TargetType="ProgressBar">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Listening}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ProgressBar.Style>
+                </ProgressBar>
+            </StackPanel>
+            <!-- Partial transcript from streaming transcription, shown only while listening. -->
+            <TextBlock FontSize="12"
+                       Foreground="#CCFFFFFF"
                        MaxWidth="420"
-                       TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center">
+                       Margin="0,6,0,0"
+                       TextWrapping="Wrap"
+                       Text="{Binding PartialTranscriptDisplay, Mode=OneWay}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
-                        <Setter Property="Text" Value="🎤 Listening…" />
+                        <Setter Property="Visibility" Value="Collapsed" />
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}">
-                                <Setter Property="Text" Value="🧠 Processing…" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Success}">
-                                <Setter Property="Text" Value="✓ Pasted" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Error}">
-                                <Setter Property="Text" Value="{Binding ErrorDisplayText}" />
-                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding State}" Value="{x:Static models:OverlayState.Listening}" />
+                                    <Condition Binding="{Binding HasPartialTranscript}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
-            <ProgressBar Width="90"
-                         Height="6"
-                         Margin="12,0,0,0"
-                         Minimum="0"
-                         Maximum="1"
-                         Value="{Binding Level, Mode=OneWay}"
-                         BorderThickness="0"
-                         Background="#33FFFFFF"
-                         Foreground="#FF4CC38A"
-                         VerticalAlignment="Center">
-                <ProgressBar.Style>
-                    <Style TargetType="ProgressBar">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Listening}">
-                                <Setter Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </ProgressBar.Style>
-            </ProgressBar>
         </StackPanel>
     </Border>
 </Window>

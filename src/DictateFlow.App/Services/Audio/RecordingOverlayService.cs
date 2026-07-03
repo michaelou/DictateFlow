@@ -28,11 +28,15 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     public void ShowListening() => OnUiThread(() =>
     {
         _viewModel.Level = 0f;
+        _viewModel.PartialTranscript = "";
         ShowState(OverlayState.Listening);
     });
 
     /// <inheritdoc />
     public void UpdateLevel(float level) => OnUiThread(() => _viewModel.Level = level);
+
+    /// <inheritdoc />
+    public void UpdateTranscript(string text) => OnUiThread(() => _viewModel.PartialTranscript = text);
 
     /// <inheritdoc />
     public void ShowProcessing() => OnUiThread(() => ShowState(OverlayState.Processing));

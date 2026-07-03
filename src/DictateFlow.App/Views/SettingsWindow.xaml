@@ -106,6 +106,15 @@
                              HorizontalAlignment="Left"
                              Text="{Binding SilenceTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
 
+                    <CheckBox Margin="0,12,0,0"
+                              Content="Enable _streaming transcription"
+                              IsChecked="{Binding EnableStreamingTranscription}" />
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Text="Transcribes while you speak and shows the live transcript on the overlay. Only applies when the active speech provider supports streaming; otherwise the standard workflow runs." />
+
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Log level" />
                     <ComboBox Width="160"
                               HorizontalAlignment="Left"

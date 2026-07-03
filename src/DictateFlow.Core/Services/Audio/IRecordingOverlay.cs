@@ -13,6 +13,13 @@ public interface IRecordingOverlay
     /// <param name="level">Normalized peak level of the latest audio buffer.</param>
     void UpdateLevel(float level);
 
+    /// <summary>
+    /// Updates the partial transcript shown while listening (streaming transcription only).
+    /// The text replaces any previously shown transcript.
+    /// </summary>
+    /// <param name="text">The transcript recognized so far.</param>
+    void UpdateTranscript(string text);
+
     /// <summary>Shows the overlay in the Processing state (captured audio is being transcribed).</summary>
     void ShowProcessing();
 

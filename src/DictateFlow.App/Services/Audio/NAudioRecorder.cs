@@ -67,6 +67,9 @@ public sealed class NAudioRecorder : IAudioRecorder, IDisposable
     public event EventHandler<float>? LevelChanged;
 
     /// <inheritdoc />
+    public event EventHandler<AudioChunk>? ChunkCaptured;
+
+    /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // waveInOpen can block for a few milliseconds; run off the caller's thread so the
@@ -230,6 +233,12 @@ public sealed class NAudioRecorder : IAudioRecorder, IDisposable
             }
 
             _writer.Write(e.Buffer, 0, e.BytesRecorded);
+        }
+
+        if (ChunkCaptured is { } chunkHandlers)
+        {
+            // NAudio reuses its capture buffer, so the chunk gets its own copy.
+            chunkHandlers.Invoke(this, new AudioChunk(e.Buffer.AsSpan(0, e.BytesRecorded).ToArray()));
         }
 
         LevelChanged?.Invoke(this, ComputePeak(e.Buffer, e.BytesRecorded));

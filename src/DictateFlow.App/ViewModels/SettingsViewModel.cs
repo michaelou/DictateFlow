@@ -179,6 +179,7 @@ public partial class SettingsViewModel : ObservableObject
         _pushToTalkHotkey = recording.PushToTalkHotkey;
         _toggleHotkey = recording.ToggleHotkey;
         _silenceTimeoutSeconds = recording.SilenceTimeoutSeconds;
+        _enableStreamingTranscription = recording.EnableStreamingTranscription;
         _selectedMicrophone = options.FirstOrDefault(o => o.DeviceId == recording.MicrophoneDeviceId) ?? options[0];
 
         SpeechProviders = _providerRegistry.GetNames(ProviderKind.Transcription);
@@ -290,6 +291,10 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the silence auto-stop timeout in seconds.</summary>
     [ObservableProperty]
     private int _silenceTimeoutSeconds;
+
+    /// <summary>Gets or sets a value indicating whether streaming transcription is enabled.</summary>
+    [ObservableProperty]
+    private bool _enableStreamingTranscription;
 
     /// <summary>Gets the registered transcription provider names offered by the Speech dropdown.</summary>
     public IReadOnlyList<string> SpeechProviders { get; }
@@ -684,6 +689,7 @@ public partial class SettingsViewModel : ObservableObject
         recording.ToggleHotkey = ToggleHotkey;
         recording.MicrophoneDeviceId = SelectedMicrophone.DeviceId;
         recording.SilenceTimeoutSeconds = SilenceTimeoutSeconds;
+        recording.EnableStreamingTranscription = EnableStreamingTranscription;
 
         ApplySpeechConfigs();
         ApplyLlmConfigs();

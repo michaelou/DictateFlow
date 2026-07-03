@@ -1,3 +1,5 @@
+using DictateFlow.Core.Models;
+
 namespace DictateFlow.Core.Services.Audio;
 
 /// <summary>Captures microphone audio into an in-memory WAV stream.</summary>
@@ -11,6 +13,12 @@ public interface IAudioRecorder
     /// Fires on an audio worker thread — handlers must marshal to the UI themselves.
     /// </summary>
     event EventHandler<float>? LevelChanged;
+
+    /// <summary>
+    /// Raised for each captured buffer with the raw PCM samples, so streaming transcription
+    /// can consume audio while recording is still running. Fires on an audio worker thread.
+    /// </summary>
+    event EventHandler<AudioChunk>? ChunkCaptured;
 
     /// <summary>Starts capture on the configured device.</summary>
     /// <param name="cancellationToken">Cancels the start operation.</param>

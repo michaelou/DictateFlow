@@ -113,6 +113,10 @@ public static class ServiceCollectionExtensions
         // The sample provider proving the extensibility claim: this line is its entire integration.
         services.AddOutputProvider<NullOutputProvider>(NullOutputProvider.RegistrationName);
 
+        // Streaming transcription (issue #20): starts a session per recording when enabled in
+        // settings and the active provider implements IStreamingTranscriptionProvider.
+        services.AddSingleton<IStreamingTranscriptionCoordinator, StreamingTranscriptionCoordinator>();
+
         // Registry-backed defaults: consumers keep injecting the plain provider interfaces
         // and always get the provider that is active in settings at call time.
         services.AddSingleton<ITranscriptionProvider, ActiveTranscriptionProvider>();
