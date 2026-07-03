@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 
@@ -13,9 +14,10 @@ namespace DictateFlow.Providers.AzureFoundry;
 /// <summary>
 /// <see cref="ITranscriptionProvider"/> backed by the Azure AI Speech
 /// <see href="https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create">Fast Transcription</see>
-/// API (<c>/speechtotext/transcriptions:transcribe</c>). Reads <see cref="SpeechSettings"/> on
-/// every call, maps all transport failures to <see cref="ProviderException"/>, and never logs
-/// the API key or the transcript above Debug.
+/// API (<c>/speechtotext/transcriptions:transcribe</c>). Reads its
+/// <see cref="AzureFoundryTranscriptionConfig"/> section on every call, maps all transport
+/// failures to <see cref="ProviderException"/>, and never logs the API key or the transcript
+/// above Debug.
 /// </summary>
 public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 {
@@ -28,7 +30,7 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     /// <summary>Header carrying the Speech resource key.</summary>
     private const string SubscriptionKeyHeader = "Ocp-Apim-Subscription-Key";
 
-    private const string ProviderName = "AzureFoundry";
+    private const string ProviderName = AzureFoundryProviders.RegistrationName;
 
     /// <summary>Size of the WAV header; subtracted when computing duration from byte length.</summary>
     private const int WavHeaderBytes = 44;
@@ -48,26 +50,26 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     };
 
     private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
+    private readonly IProviderConfigReader _configReader;
     private readonly IUsageSink _usageSink;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AzureFoundryTranscriptionProvider> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="AzureFoundryTranscriptionProvider"/> class.</summary>
     /// <param name="httpClient">Client supplied by <c>IHttpClientFactory</c>, wrapped in the standard resilience pipeline.</param>
-    /// <param name="settingsService">Supplies the speech endpoint, key, deployment, language and timeout.</param>
+    /// <param name="configReader">Supplies the endpoint, key, deployment, language and timeout, read per call.</param>
     /// <param name="usageSink">Receives the audio duration after each successful call.</param>
     /// <param name="timeProvider">Timestamps usage records (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public AzureFoundryTranscriptionProvider(
         HttpClient httpClient,
-        ISettingsService settingsService,
+        IProviderConfigReader configReader,
         IUsageSink usageSink,
         TimeProvider timeProvider,
         ILogger<AzureFoundryTranscriptionProvider> logger)
     {
         _httpClient = httpClient;
-        _settingsService = settingsService;
+        _configReader = configReader;
         _usageSink = usageSink;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -76,7 +78,7 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     /// <inheritdoc />
     public async Task<TranscriptionResult> TranscribeAsync(Stream audio, CancellationToken cancellationToken)
     {
-        var speech = _settingsService.Current.Speech;
+        var speech = _configReader.GetConfig<AzureFoundryTranscriptionConfig>(ProviderKind.Transcription, ProviderName);
         var requestUri = BuildRequestUri(speech);
 
         if (string.IsNullOrWhiteSpace(speech.ApiKey))
@@ -165,7 +167,7 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
     /// as-is (api-version added if missing); otherwise the endpoint is treated as the resource
     /// base and the <c>speechtotext/transcriptions:transcribe</c> route is appended.
     /// </summary>
-    private Uri BuildRequestUri(SpeechSettings speech)
+    private Uri BuildRequestUri(AzureFoundryTranscriptionConfig speech)
     {
         var endpointText = speech.Endpoint.Trim();
         if (!Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint)

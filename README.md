@@ -10,7 +10,7 @@ All providers (speech, LLM, output) are replaceable via interfaces registered in
 
 ## Status
 
-**M6: User experience** — the full dictation loop works end to end: global hotkey recording (M2), Azure AI Foundry transcription (M3), prompt-mode LLM enhancement (M4), automatic paste / preview output with history writes (M5), plus a searchable History window, a cost dashboard with configurable pricing, a technical dictionary editor, per-application prompt-mode rules, and polished overlay/error messaging with configurable logging (M6). Next: provider registry (M7), import/export & startup polish (M8).
+**M7: Extensibility** — the full dictation loop works end to end: global hotkey recording (M2), Azure AI Foundry transcription (M3), prompt-mode LLM enhancement (M4), automatic paste / preview output with history writes (M5), history window / cost dashboard / dictionary / app rules / diagnostics (M6), and a named provider registry (M7): every speech, LLM and output provider is registered by name, selected purely through settings (`ActiveProviders` + per-provider `Providers` sections, with automatic migration of pre-M7 settings files), and switchable at runtime from dropdowns in Settings. Adding a provider is one class + one DI registration line — see [docs/extensibility.md](docs/extensibility.md). Next: import/export & startup polish (M8).
 
 ## Requirements
 
@@ -48,11 +48,15 @@ dotnet test
 ```
 DictateFlow.sln
 src/
-  DictateFlow.Core/                    # Interfaces, models, pipeline abstractions, settings models (no WPF/vendor references)
+  DictateFlow.Core/                    # Interfaces, models, pipeline abstractions, provider registry, settings models (no WPF/vendor references)
   DictateFlow.App/                     # WPF tray app (net10.0-windows): views, viewmodels, Windows-specific services, DI bootstrap
   DictateFlow.Providers.AzureFoundry/  # Azure AI Foundry speech + LLM providers
+samples/
+  DictateFlow.Samples.NullOutput/      # Minimal output provider proving the one-class-one-line extensibility claim
 tests/
   DictateFlow.Tests/                   # xUnit + Moq unit tests
+docs/
+  extensibility.md                     # How to add a speech/LLM/output provider
 ```
 
 ## App data

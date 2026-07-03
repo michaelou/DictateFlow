@@ -6,16 +6,17 @@ using System.Text.Json.Serialization;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Providers.AzureFoundry;
 
 /// <summary>
 /// <see cref="ILLMProvider"/> backed by an Azure AI Foundry deployment through the
-/// OpenAI-compatible chat-completions surface. Reads <see cref="LlmSettings"/> on every call,
-/// maps all transport failures to <see cref="ProviderException"/>, reports token usage to
-/// <see cref="IUsageSink"/> after each successful call, and never logs the API key or the
-/// text above Debug.
+/// OpenAI-compatible chat-completions surface. Reads its <see cref="AzureFoundryLlmConfig"/>
+/// section on every call, maps all transport failures to <see cref="ProviderException"/>,
+/// reports token usage to <see cref="IUsageSink"/> after each successful call, and never logs
+/// the API key or the text above Debug.
 /// </summary>
 public sealed class AzureFoundryLLMProvider : ILLMProvider
 {
@@ -31,26 +32,26 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
     };
 
     private readonly HttpClient _httpClient;
-    private readonly ISettingsService _settingsService;
+    private readonly IProviderConfigReader _configReader;
     private readonly IUsageSink _usageSink;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AzureFoundryLLMProvider> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="AzureFoundryLLMProvider"/> class.</summary>
     /// <param name="httpClient">Client supplied by <c>IHttpClientFactory</c>, wrapped in the standard resilience pipeline.</param>
-    /// <param name="settingsService">Supplies the LLM endpoint, key, deployment and timeout.</param>
+    /// <param name="configReader">Supplies the endpoint, key, deployment and timeout, read per call.</param>
     /// <param name="usageSink">Receives token usage after each successful call.</param>
     /// <param name="timeProvider">Timestamps usage records (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public AzureFoundryLLMProvider(
         HttpClient httpClient,
-        ISettingsService settingsService,
+        IProviderConfigReader configReader,
         IUsageSink usageSink,
         TimeProvider timeProvider,
         ILogger<AzureFoundryLLMProvider> logger)
     {
         _httpClient = httpClient;
-        _settingsService = settingsService;
+        _configReader = configReader;
         _usageSink = usageSink;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -59,7 +60,7 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
     /// <inheritdoc />
     public async Task<string> ProcessAsync(PromptContext context, CancellationToken cancellationToken)
     {
-        var llm = _settingsService.Current.Llm;
+        var llm = _configReader.GetConfig<AzureFoundryLlmConfig>(ProviderKind.Llm, AzureFoundryProviders.RegistrationName);
         var requestUri = BuildRequestUri(llm);
 
         if (string.IsNullOrWhiteSpace(llm.ApiKey))
@@ -175,7 +176,7 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
     /// gets an api-version), the OpenAI v1 base <c>…/openai/v1</c> (the route is appended and the
     /// model travels in the body), and a bare host (the classic Azure deployments route is built).
     /// </summary>
-    private Uri BuildRequestUri(LlmSettings llm)
+    private Uri BuildRequestUri(AzureFoundryLlmConfig llm)
     {
         var endpointText = llm.Endpoint.Trim();
         if (!Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint)
@@ -238,7 +239,7 @@ public sealed class AzureFoundryLLMProvider : ILLMProvider
     }
 
     /// <summary>Throws a configuration error when no deployment/model name is set.</summary>
-    private void RequireDeployment(LlmSettings llm)
+    private void RequireDeployment(AzureFoundryLlmConfig llm)
     {
         if (string.IsNullOrWhiteSpace(llm.DeploymentName))
         {

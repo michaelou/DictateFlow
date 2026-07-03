@@ -1,20 +1,27 @@
+using System.Text.Json;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Providers;
+using DictateFlow.Core.Services.Transcription;
+
 namespace DictateFlow.Core.Models;
 
 /// <summary>
 /// Root application settings persisted to <c>settings.json</c> in the DictateFlow app data directory.
-/// The full schema is defined up front so it stays stable across milestones; later milestones
-/// consume the individual sections.
+/// Provider configuration is fully named since M7: <see cref="ActiveProviders"/> selects one
+/// provider per <see cref="ProviderKind"/> and <see cref="Providers"/> holds one config
+/// subsection per registered provider. Files with the pre-M7 flat <c>Speech</c>/<c>Llm</c>
+/// sections are migrated at load time (see <c>ISettingsMigration</c>).
 /// </summary>
 public sealed class AppSettings
 {
     /// <summary>Gets or sets the audio recording configuration (consumed in M2).</summary>
     public RecordingSettings Recording { get; set; } = new();
 
-    /// <summary>Gets or sets the speech-recognition provider configuration (consumed in M3).</summary>
-    public SpeechSettings Speech { get; set; } = new();
+    /// <summary>Gets or sets the names of the active providers, one per <see cref="ProviderKind"/> (consumed in M7).</summary>
+    public ActiveProviderSettings ActiveProviders { get; set; } = new();
 
-    /// <summary>Gets or sets the LLM enhancement provider configuration (consumed in M4).</summary>
-    public LlmSettings Llm { get; set; } = new();
+    /// <summary>Gets or sets the per-provider configuration sections (consumed in M7).</summary>
+    public ProviderConfigurationSettings Providers { get; set; } = new();
 
     /// <summary>Gets or sets the output pipeline configuration (consumed in M5).</summary>
     public OutputSettings Output { get; set; } = new();
@@ -71,53 +78,51 @@ public sealed class RecordingSettings
     public int SilenceTimeoutSeconds { get; set; } = 30;
 }
 
-/// <summary>Speech-recognition (transcription) provider settings.</summary>
-public sealed class SpeechSettings
+/// <summary>
+/// The name of the active provider for each <see cref="ProviderKind"/>, matching a name
+/// registered through the provider registration extensions (case-insensitive). An empty
+/// name selects the first registered provider of the kind.
+/// </summary>
+public sealed class ActiveProviderSettings
 {
-    /// <summary>Gets or sets the service endpoint URL.</summary>
-    public string Endpoint { get; set; } = "";
+    /// <summary>Gets or sets the active transcription provider name.</summary>
+    public string Transcription { get; set; } = MockTranscriptionProvider.RegistrationName;
 
-    /// <summary>Gets or sets the API key used to authenticate against the service.</summary>
-    public string ApiKey { get; set; } = "";
+    /// <summary>Gets or sets the active LLM provider name.</summary>
+    public string Llm { get; set; } = MockLLMProvider.RegistrationName;
 
-    /// <summary>Gets or sets the model deployment name.</summary>
-    public string DeploymentName { get; set; } = "";
-
-    /// <summary>Gets or sets the spoken language as a BCP-47 tag.</summary>
-    public string Language { get; set; } = "en-US";
-
-    /// <summary>Gets or sets the request timeout in seconds.</summary>
-    public int TimeoutSeconds { get; set; } = 30;
+    /// <summary>Gets or sets the active output provider name; empty selects the first registered provider.</summary>
+    public string Output { get; set; } = "";
 }
 
-/// <summary>LLM text-enhancement provider settings.</summary>
-public sealed class LlmSettings
+/// <summary>
+/// The per-provider configuration sections, one dictionary per <see cref="ProviderKind"/>
+/// keyed by provider name. Values stay raw JSON so provider projects define their own config
+/// types without Core knowing them; providers read their section through
+/// <see cref="IProviderConfigReader"/>. The built-in mock sections are present by default so
+/// a fresh file documents the shape.
+/// </summary>
+public sealed class ProviderConfigurationSettings
 {
-    /// <summary>Gets or sets the service endpoint URL.</summary>
-    public string Endpoint { get; set; } = "";
+    /// <summary>Gets or sets the transcription provider sections, keyed by provider name.</summary>
+    public Dictionary<string, JsonElement> Transcription { get; set; } = new()
+    {
+        [MockTranscriptionProvider.RegistrationName] = JsonSerializer.SerializeToElement(new MockTranscriptionConfig()),
+    };
 
-    /// <summary>Gets or sets the API key used to authenticate against the service.</summary>
-    public string ApiKey { get; set; } = "";
+    /// <summary>Gets or sets the LLM provider sections, keyed by provider name.</summary>
+    public Dictionary<string, JsonElement> Llm { get; set; } = new()
+    {
+        [MockLLMProvider.RegistrationName] = JsonSerializer.SerializeToElement(new MockLlmConfig()),
+    };
 
-    /// <summary>Gets or sets the model deployment name.</summary>
-    public string DeploymentName { get; set; } = "";
-
-    /// <summary>Gets or sets the sampling temperature.</summary>
-    public double Temperature { get; set; } = 0.2;
-
-    /// <summary>Gets or sets the maximum number of completion tokens per request.</summary>
-    public int MaxTokens { get; set; } = 2000;
-
-    /// <summary>Gets or sets the request timeout in seconds.</summary>
-    public int TimeoutSeconds { get; set; } = 60;
+    /// <summary>Gets or sets the output provider sections, keyed by provider name (none of the built-in output providers need one).</summary>
+    public Dictionary<string, JsonElement> Output { get; set; } = [];
 }
 
-/// <summary>Output (text delivery) pipeline settings.</summary>
+/// <summary>Output (text delivery) pipeline settings. The provider itself is selected via <see cref="ActiveProviderSettings.Output"/>.</summary>
 public sealed class OutputSettings
 {
-    /// <summary>Gets or sets the output provider name; see <see cref="OutputProviderNames"/>.</summary>
-    public string Provider { get; set; } = OutputProviderNames.ClipboardPaste;
-
     /// <summary>Gets or sets the delivery mode; see <see cref="OutputModes"/>.</summary>
     public string Mode { get; set; } = OutputModes.Automatic;
 }

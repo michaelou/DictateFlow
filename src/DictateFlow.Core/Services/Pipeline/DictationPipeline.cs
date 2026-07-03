@@ -12,9 +12,10 @@ namespace DictateFlow.Core.Services.Pipeline;
 /// <summary>
 /// Default <see cref="IDictationPipeline"/> implementation:
 /// transcription → prompt-mode selection → prompt resolution → LLM → output gate →
-/// history → output. Depends only on Core abstractions — the concrete output providers and
-/// the preview interaction are injected. Output settings are read on every run, so changes
-/// apply live. Every run ends with one Debug summary line carrying the per-stage latencies.
+/// history → output. Depends only on Core abstractions — the injected providers are the
+/// registry-backed defaults, which resolve the active provider from settings on every call,
+/// so changes apply live and the pipeline itself carries no provider knowledge. Every run
+/// ends with one Debug summary line carrying the per-stage latencies.
 /// </summary>
 /// <remarks>
 /// Failure policy: a transcription failure fails the run; an LLM failure degrades to the raw
@@ -30,9 +31,8 @@ public sealed class DictationPipeline : IDictationPipeline
     private readonly IPromptResolver _promptResolver;
     private readonly ILLMProvider _llmProvider;
     private readonly IHistoryRepository _historyRepository;
-    private readonly IEnumerable<IOutputProvider> _outputProviders;
+    private readonly IOutputProvider _outputProvider;
     private readonly IOutputGate _outputGate;
-    private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DictationPipeline> _logger;
 
@@ -42,9 +42,8 @@ public sealed class DictationPipeline : IDictationPipeline
     /// <param name="promptResolver">Builds the LLM prompt context for the transcript.</param>
     /// <param name="llmProvider">Enhances the transcript.</param>
     /// <param name="historyRepository">Persists the confirmed final text.</param>
-    /// <param name="outputProviders">All registered output providers; the active one is picked per run from settings.</param>
+    /// <param name="outputProvider">Delivers the confirmed text.</param>
     /// <param name="outputGate">Confirms (and possibly edits) the draft before delivery.</param>
-    /// <param name="settingsService">Supplies the output provider name, read per run.</param>
     /// <param name="timeProvider">Supplies the history timestamp (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public DictationPipeline(
@@ -53,9 +52,8 @@ public sealed class DictationPipeline : IDictationPipeline
         IPromptResolver promptResolver,
         ILLMProvider llmProvider,
         IHistoryRepository historyRepository,
-        IEnumerable<IOutputProvider> outputProviders,
+        IOutputProvider outputProvider,
         IOutputGate outputGate,
-        ISettingsService settingsService,
         TimeProvider timeProvider,
         ILogger<DictationPipeline> logger)
     {
@@ -64,9 +62,8 @@ public sealed class DictationPipeline : IDictationPipeline
         _promptResolver = promptResolver;
         _llmProvider = llmProvider;
         _historyRepository = historyRepository;
-        _outputProviders = outputProviders;
+        _outputProvider = outputProvider;
         _outputGate = outputGate;
-        _settingsService = settingsService;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -149,15 +146,15 @@ public sealed class DictationPipeline : IDictationPipeline
             _logger.LogError(ex, "History write failed; continuing with output");
         }
 
-        // 5. Output through the provider selected in settings (read per run — applied live).
+        // 5. Output. The injected provider is the registry-backed default, which selects the
+        //    active provider from settings per call — changes apply live.
         try
         {
-            var provider = SelectOutputProvider();
             var stopwatch = Stopwatch.StartNew();
-            await provider.OutputAsync(confirmedText).ConfigureAwait(false);
+            await _outputProvider.OutputAsync(confirmedText).ConfigureAwait(false);
             timings.OutputMs = stopwatch.ElapsedMilliseconds;
             _logger.LogDebug(
-                "Output step ({ProviderName}) completed in {ElapsedMs} ms", provider.Name, timings.OutputMs);
+                "Output step ({ProviderName}) completed in {ElapsedMs} ms", _outputProvider.Name, timings.OutputMs);
         }
         catch (Exception ex)
         {
@@ -219,28 +216,6 @@ public sealed class DictationPipeline : IDictationPipeline
             var detail = ex is ProviderException failure ? $" {failure.Message}" : "";
             return (transcript, $"AI enhancement failed — using the raw transcript.{detail}");
         }
-    }
-
-    /// <summary>
-    /// Picks the output provider named in settings, falling back to the first registered
-    /// provider (with a warning) when the configured name is unknown.
-    /// </summary>
-    private IOutputProvider SelectOutputProvider()
-    {
-        var configuredName = _settingsService.Current.Output.Provider;
-        var provider = _outputProviders.FirstOrDefault(
-            p => string.Equals(p.Name, configuredName, StringComparison.OrdinalIgnoreCase));
-        if (provider is not null)
-        {
-            return provider;
-        }
-
-        provider = _outputProviders.FirstOrDefault()
-            ?? throw new InvalidOperationException("No output providers are registered.");
-        _logger.LogWarning(
-            "Unknown output provider '{ConfiguredName}' in settings; falling back to '{FallbackName}'",
-            configuredName, provider.Name);
-        return provider;
     }
 
     /// <summary>Formats a provider failure for the user, pointing to Settings when configuration is at fault.</summary>

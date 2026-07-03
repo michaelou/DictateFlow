@@ -5,6 +5,7 @@ using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,7 +49,7 @@ public sealed class DictationPipelineTests
         _history.Setup(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Callback(() => _callOrder.Add("history"))
             .Returns(Task.CompletedTask);
-        _output.SetupGet(o => o.Name).Returns(OutputProviderNames.ClipboardPaste);
+        _output.SetupGet(o => o.Name).Returns("TestOutput");
         _output.Setup(o => o.OutputAsync(It.IsAny<string>()))
             .Callback(() => _callOrder.Add("output"))
             .Returns(Task.CompletedTask);
@@ -58,10 +59,9 @@ public sealed class DictationPipelineTests
             .ReturnsAsync((PipelineResult draft) => draft.FinalText);
     }
 
-    private DictationPipeline CreatePipeline(params IOutputProvider[] outputProviders)
+    private DictationPipeline CreatePipeline()
         => new(_transcription.Object, _modeSelector.Object, _resolver.Object, _llm.Object, _history.Object,
-            outputProviders.Length > 0 ? outputProviders : [_output.Object],
-            _gate.Object, _settings.Object, TimeProvider.System,
+            _output.Object, _gate.Object, TimeProvider.System,
             Mock.Of<ILogger<DictationPipeline>>());
 
     private static PipelineRequest CreateRequest()
@@ -283,38 +283,6 @@ public sealed class DictationPipelineTests
         _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task RunAsync_SelectsOutputProviderFromSettingsPerCall()
-    {
-        var keyboard = new Mock<IOutputProvider>();
-        keyboard.SetupGet(o => o.Name).Returns(OutputProviderNames.SimulatedKeyboard);
-        keyboard.Setup(o => o.OutputAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
-        var pipeline = CreatePipeline(_output.Object, keyboard.Object);
-
-        _appSettings.Output.Provider = OutputProviderNames.SimulatedKeyboard;
-        await pipeline.RunAsync(CreateRequest(), CancellationToken.None);
-
-        keyboard.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Once);
-        _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
-
-        // Settings are read per run — switching applies to the very next dictation.
-        _appSettings.Output.Provider = OutputProviderNames.ClipboardPaste;
-        await pipeline.RunAsync(CreateRequest(), CancellationToken.None);
-
-        _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task RunAsync_UnknownOutputProviderName_FallsBackToFirstRegistered()
-    {
-        _appSettings.Output.Provider = "DoesNotExist";
-
-        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
-
-        Assert.True(result.Success);
-        _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Once);
-    }
-
     /// <summary>
     /// End-to-end without network or UI: mock speech, a real resolver (store seeded into a
     /// temp dir), mock LLM, a real SQLite history repository and a pass-through gate — a
@@ -327,19 +295,24 @@ public sealed class DictationPipelineTests
         await new DatabaseInitializer(paths, NullLogger<DatabaseInitializer>.Instance).InitializeAsync();
         _appSettings.ActivePromptMode = "Raw";
 
-        var speech = new MockTranscriptionProvider { CannedText = "hello world", Delay = TimeSpan.Zero };
+        var configReader = new TestProviderConfigReader()
+            .Set(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName,
+                new MockTranscriptionConfig { Text = "hello world", DelayMs = 0 })
+            .Set(ProviderKind.Llm, MockLLMProvider.RegistrationName, new MockLlmConfig { DelayMs = 0 });
+        var speech = new MockTranscriptionProvider(configReader);
         var store = new PromptModeStore(paths, NullLogger<PromptModeStore>.Instance);
         var foregroundApp = new Mock<IForegroundAppService>();
         foregroundApp.SetupGet(f => f.LastCaptured).Returns("notepad");
         var resolver = new PromptResolver(
-            store, _settings.Object, foregroundApp.Object, TimeProvider.System, NullLogger<PromptResolver>.Instance);
-        var llm = new MockLLMProvider { Delay = TimeSpan.Zero };
+            store, _settings.Object, configReader, foregroundApp.Object, TimeProvider.System,
+            NullLogger<PromptResolver>.Instance);
+        var llm = new MockLLMProvider(configReader);
         var history = new SqliteHistoryRepository(paths, _settings.Object, NullLogger<SqliteHistoryRepository>.Instance);
         var modeSelector = new PromptModeSelector(_settings.Object, NullLogger<PromptModeSelector>.Instance);
 
         var pipeline = new DictationPipeline(
-            speech, modeSelector, resolver, llm, history, [_output.Object], _gate.Object,
-            _settings.Object, TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
+            speech, modeSelector, resolver, llm, history, _output.Object, _gate.Object,
+            TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
         var result = await pipeline.RunAsync(CreateRequest(), CancellationToken.None);
 

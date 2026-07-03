@@ -1,6 +1,6 @@
-namespace DictateFlow.Core.Models;
+namespace DictateFlow.App.Services.Output;
 
-/// <summary>Well-known values for <see cref="OutputSettings.Provider"/>.</summary>
+/// <summary>The names the built-in output providers are registered under.</summary>
 public static class OutputProviderNames
 {
     /// <summary>Places the text on the clipboard and sends Ctrl+V to the target application.</summary>
