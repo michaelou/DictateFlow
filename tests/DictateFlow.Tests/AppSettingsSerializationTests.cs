@@ -18,8 +18,8 @@ public sealed class AppSettingsSerializationTests
         var root = document.RootElement;
 
         var recording = root.GetProperty("Recording");
-        Assert.Equal("PushToTalk", recording.GetProperty("Mode").GetString());
-        Assert.Equal("Ctrl+Alt+D", recording.GetProperty("Hotkey").GetString());
+        Assert.Equal("Ctrl+Alt+D", recording.GetProperty("PushToTalkHotkey").GetString());
+        Assert.Equal("", recording.GetProperty("ToggleHotkey").GetString());
         Assert.Equal(JsonValueKind.Null, recording.GetProperty("MicrophoneDeviceId").ValueKind);
         Assert.Equal(30, recording.GetProperty("SilenceTimeoutSeconds").GetInt32());
 

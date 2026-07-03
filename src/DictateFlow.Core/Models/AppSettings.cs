@@ -100,11 +100,17 @@ public sealed class ApplicationRule
 /// <summary>Audio recording settings.</summary>
 public sealed class RecordingSettings
 {
-    /// <summary>Gets or sets the recording activation mode (e.g. <c>PushToTalk</c> or <c>Toggle</c>).</summary>
-    public string Mode { get; set; } = "PushToTalk";
+    /// <summary>
+    /// Gets or sets the push-to-talk hotkey: recording runs while this chord is held down.
+    /// An empty value disables push-to-talk. Independent of <see cref="ToggleHotkey"/>.
+    /// </summary>
+    public string PushToTalkHotkey { get; set; } = "Ctrl+Alt+D";
 
-    /// <summary>Gets or sets the global hotkey that starts and stops dictation.</summary>
-    public string Hotkey { get; set; } = "Ctrl+Alt+D";
+    /// <summary>
+    /// Gets or sets the toggle hotkey: pressing this chord starts recording, pressing it
+    /// again stops. An empty value disables toggle. Independent of <see cref="PushToTalkHotkey"/>.
+    /// </summary>
+    public string ToggleHotkey { get; set; } = "";
 
     /// <summary>Gets or sets the identifier of the microphone capture device; <see langword="null"/> selects the system default.</summary>
     public string? MicrophoneDeviceId { get; set; }

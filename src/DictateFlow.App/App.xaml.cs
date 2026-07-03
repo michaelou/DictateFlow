@@ -208,7 +208,10 @@ public partial class App : Application
             return;
         }
 
-        var hotkey = settingsService.Current.Recording.Hotkey;
+        var recording = settingsService.Current.Recording;
+        var hotkey = !string.IsNullOrWhiteSpace(recording.PushToTalkHotkey)
+            ? recording.PushToTalkHotkey
+            : recording.ToggleHotkey;
         var windowService = _host.Services.GetRequiredService<IWindowService>();
         _trayIconService?.ShowInfoNotification(
             "Welcome to DictateFlow",

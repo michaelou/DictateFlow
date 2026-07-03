@@ -131,15 +131,14 @@ public sealed class DictationControllerTests
     }
 
     [Fact]
-    public void HotkeyPressed_ToggleMode_StartsThenStops()
+    public void TogglePressed_StartsThenStops()
     {
-        _appSettings.Recording.Mode = RecordingModes.Toggle;
         var controller = CreateController();
 
-        _hotkeys.Raise(h => h.HotkeyPressed += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.TogglePressed += null, EventArgs.Empty);
         Assert.True(controller.IsRecording);
 
-        _hotkeys.Raise(h => h.HotkeyPressed += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.TogglePressed += null, EventArgs.Empty);
         Assert.False(controller.IsRecording);
 
         _recorder.Verify(r => r.StartAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -147,29 +146,34 @@ public sealed class DictationControllerTests
     }
 
     [Fact]
-    public void HotkeyPressedAndReleased_PushToTalkMode_StartsAndStops()
+    public void PushToTalk_PressAndRelease_StartsAndStops()
     {
-        _appSettings.Recording.Mode = RecordingModes.PushToTalk;
         var controller = CreateController();
 
-        _hotkeys.Raise(h => h.HotkeyPressed += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.PushToTalkPressed += null, EventArgs.Empty);
         Assert.True(controller.IsRecording);
 
-        _hotkeys.Raise(h => h.HotkeyReleased += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.PushToTalkReleased += null, EventArgs.Empty);
         Assert.False(controller.IsRecording);
     }
 
     [Fact]
-    public void HotkeyReleased_ToggleMode_IsIgnored()
+    public void BothHotkeys_AreHandledByTheSameController()
     {
-        _appSettings.Recording.Mode = RecordingModes.Toggle;
+        // The two triggers are independent and both live at once.
         var controller = CreateController();
 
-        _hotkeys.Raise(h => h.HotkeyPressed += null, EventArgs.Empty);
-        _hotkeys.Raise(h => h.HotkeyReleased += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.PushToTalkPressed += null, EventArgs.Empty);
+        _hotkeys.Raise(h => h.PushToTalkReleased += null, EventArgs.Empty);
+        Assert.False(controller.IsRecording);
 
+        _hotkeys.Raise(h => h.TogglePressed += null, EventArgs.Empty);
         Assert.True(controller.IsRecording);
-        _recorder.Verify(r => r.StopAsync(), Times.Never);
+        _hotkeys.Raise(h => h.TogglePressed += null, EventArgs.Empty);
+        Assert.False(controller.IsRecording);
+
+        _recorder.Verify(r => r.StartAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _recorder.Verify(r => r.StopAsync(), Times.Exactly(2));
     }
 
     [Fact]

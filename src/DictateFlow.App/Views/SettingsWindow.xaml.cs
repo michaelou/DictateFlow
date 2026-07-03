@@ -18,11 +18,20 @@ public partial class SettingsWindow : Window
         InitializeComponent();
     }
 
+    /// <summary>Captures a chord for the push-to-talk hotkey box.</summary>
+    private void OnPushToTalkHotkeyPreviewKeyDown(object sender, KeyEventArgs e)
+        => CaptureHotkey(e, (vm, mods, vk) => vm.CapturePushToTalkHotkey(mods, vk));
+
+    /// <summary>Captures a chord for the toggle hotkey box.</summary>
+    private void OnToggleHotkeyPreviewKeyDown(object sender, KeyEventArgs e)
+        => CaptureHotkey(e, (vm, mods, vk) => vm.CaptureToggleHotkey(mods, vk));
+
     /// <summary>
-    /// Captures the chord pressed while the hotkey textbox has focus and forwards it to the
-    /// view model. Pure modifier presses are ignored — the chord completes with a main key.
+    /// Captures the chord pressed while a hotkey textbox has focus and forwards it to the
+    /// view model via <paramref name="apply"/>. Pure modifier presses are ignored — the chord
+    /// completes with a main key.
     /// </summary>
-    private void OnHotkeyBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    private void CaptureHotkey(KeyEventArgs e, Action<SettingsViewModel, HotkeyModifiers, uint> apply)
     {
         e.Handled = true;
 
@@ -41,7 +50,7 @@ public partial class SettingsWindow : Window
             // WPF ModifierKeys uses the same flag values as HotkeyModifiers (MOD_* constants).
             var modifiers = (HotkeyModifiers)Keyboard.Modifiers;
             var virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
-            viewModel.CaptureHotkey(modifiers, virtualKey);
+            apply(viewModel, modifiers, virtualKey);
         }
     }
 }

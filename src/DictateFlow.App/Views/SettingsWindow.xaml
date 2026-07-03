@@ -60,29 +60,39 @@
                                FontWeight="SemiBold"
                                Text="Recording" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Mode" />
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Push-to-talk hotkey (hold to talk)" />
                     <StackPanel Orientation="Horizontal">
-                        <RadioButton Content="Push-to-talk (hold the hotkey)"
-                                     GroupName="RecordingMode"
-                                     IsChecked="{Binding IsPushToTalk}" />
-                        <RadioButton Margin="16,0,0,0"
-                                     Content="Toggle (press to start/stop)"
-                                     GroupName="RecordingMode"
-                                     IsChecked="{Binding IsToggle}" />
+                        <TextBox x:Name="PushToTalkHotkeyBox"
+                                 Width="200"
+                                 HorizontalAlignment="Left"
+                                 IsReadOnly="True"
+                                 IsReadOnlyCaretVisible="False"
+                                 Text="{Binding PushToTalkHotkey, Mode=OneWay}"
+                                 PreviewKeyDown="OnPushToTalkHotkeyPreviewKeyDown" />
+                        <Button Margin="8,0,0,0"
+                                Padding="8,0"
+                                Content="Clear"
+                                Command="{Binding ClearPushToTalkHotkeyCommand}" />
                     </StackPanel>
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Hotkey" />
-                    <TextBox x:Name="HotkeyBox"
-                             Width="200"
-                             HorizontalAlignment="Left"
-                             IsReadOnly="True"
-                             IsReadOnlyCaretVisible="False"
-                             Text="{Binding Hotkey, Mode=OneWay}"
-                             PreviewKeyDown="OnHotkeyBoxPreviewKeyDown" />
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Toggle hotkey (press to start/stop)" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox x:Name="ToggleHotkeyBox"
+                                 Width="200"
+                                 HorizontalAlignment="Left"
+                                 IsReadOnly="True"
+                                 IsReadOnlyCaretVisible="False"
+                                 Text="{Binding ToggleHotkey, Mode=OneWay}"
+                                 PreviewKeyDown="OnToggleHotkeyPreviewKeyDown" />
+                        <Button Margin="8,0,0,0"
+                                Padding="8,0"
+                                Content="Clear"
+                                Command="{Binding ClearToggleHotkeyCommand}" />
+                    </StackPanel>
                     <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
-                               Text="Click the box and press the desired key combination." />
+                               Text="Click a box and press the desired key combination. Leave a box empty (Clear) to disable that trigger." />
 
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Microphone" />
                     <ComboBox Width="280"

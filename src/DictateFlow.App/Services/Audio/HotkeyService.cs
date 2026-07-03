@@ -11,10 +11,11 @@ using Microsoft.Extensions.Logging;
 namespace DictateFlow.App.Services.Audio;
 
 /// <summary>
-/// Global hotkey listener. Toggle mode uses <c>RegisterHotKey</c> against a hidden
-/// message-only window (<c>WM_HOTKEY</c>); push-to-talk mode installs a low-level
+/// Global hotkey listener. The toggle hotkey uses <c>RegisterHotKey</c> against a hidden
+/// message-only window (<c>WM_HOTKEY</c>); the push-to-talk hotkey installs a low-level
 /// keyboard hook (<c>WH_KEYBOARD_LL</c>) because <c>RegisterHotKey</c> cannot report
-/// key-up. <see cref="Apply"/> tears down the previous registration and re-arms, so
+/// key-up. Both are independent and armed simultaneously; either is skipped when its hotkey
+/// is empty. <see cref="Apply"/> tears down the previous registration and re-arms, so
 /// settings changes take effect without a restart.
 /// </summary>
 public sealed class HotkeyService : IHotkeyService
@@ -35,7 +36,7 @@ public sealed class HotkeyService : IHotkeyService
     private Dispatcher? _dispatcher;
     private HwndSource? _hotkeyWindow;
     private IntPtr _hookHandle;
-    private HotkeyChord? _chord;
+    private HotkeyChord? _pttChord;
     private bool _mainKeyDown;
 
     /// <summary>Initializes a new instance of the <see cref="HotkeyService"/> class.</summary>
@@ -49,10 +50,13 @@ public sealed class HotkeyService : IHotkeyService
     }
 
     /// <inheritdoc />
-    public event EventHandler? HotkeyPressed;
+    public event EventHandler? TogglePressed;
 
     /// <inheritdoc />
-    public event EventHandler? HotkeyReleased;
+    public event EventHandler? PushToTalkPressed;
+
+    /// <inheritdoc />
+    public event EventHandler? PushToTalkReleased;
 
     /// <inheritdoc />
     public void Apply(RecordingSettings settings)
@@ -81,23 +85,27 @@ public sealed class HotkeyService : IHotkeyService
         TearDown();
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
-        if (!HotkeyParser.TryParse(settings.Hotkey, out var chord))
+        // The two hotkeys are independent: a failure or empty value in one never affects the other.
+        ArmHotkey(settings.ToggleHotkey, "toggle", RegisterToggleHotkey);
+        ArmHotkey(settings.PushToTalkHotkey, "push-to-talk", InstallPushToTalkHook);
+    }
+
+    /// <summary>Parses <paramref name="hotkey"/> and arms it via <paramref name="arm"/>; empty is skipped, unparseable is reported.</summary>
+    private void ArmHotkey(string? hotkey, string label, Action<HotkeyChord> arm)
+    {
+        if (string.IsNullOrWhiteSpace(hotkey))
         {
-            _logger.LogWarning("Hotkey '{Hotkey}' could not be parsed; no hotkey is active", settings.Hotkey);
-            NotifyHotkeyProblem($"'{settings.Hotkey}' is not a valid hotkey. Fix it in Settings.");
             return;
         }
 
-        _chord = chord;
+        if (!HotkeyParser.TryParse(hotkey, out var chord))
+        {
+            _logger.LogWarning("The {Label} hotkey '{Hotkey}' could not be parsed; it is not active", label, hotkey);
+            NotifyHotkeyProblem($"'{hotkey}' is not a valid {label} hotkey. Fix it in Settings.");
+            return;
+        }
 
-        if (string.Equals(settings.Mode, RecordingModes.Toggle, StringComparison.OrdinalIgnoreCase))
-        {
-            RegisterToggleHotkey(chord);
-        }
-        else
-        {
-            InstallPushToTalkHook(chord);
-        }
+        arm(chord);
     }
 
     private void RegisterToggleHotkey(HotkeyChord chord)
@@ -129,6 +137,7 @@ public sealed class HotkeyService : IHotkeyService
 
     private void InstallPushToTalkHook(HotkeyChord chord)
     {
+        _pttChord = chord;
         _pressedModifierKeys.Clear();
         _mainKeyDown = false;
         _hookHandle = NativeMethods.SetWindowsHookEx(
@@ -165,7 +174,7 @@ public sealed class HotkeyService : IHotkeyService
             _hookHandle = IntPtr.Zero;
         }
 
-        _chord = null;
+        _pttChord = null;
         _mainKeyDown = false;
         _pressedModifierKeys.Clear();
     }
@@ -174,7 +183,7 @@ public sealed class HotkeyService : IHotkeyService
     {
         if (msg == NativeMethods.WmHotkey && wParam.ToInt64() == HotkeyId)
         {
-            RaiseAsync(HotkeyPressed);
+            RaiseAsync(TogglePressed);
             handled = true;
         }
 
@@ -183,7 +192,7 @@ public sealed class HotkeyService : IHotkeyService
 
     private IntPtr OnKeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && _chord is { } chord)
+        if (nCode >= 0 && _pttChord is { } chord)
         {
             var info = Marshal.PtrToStructure<NativeMethods.KbdLlHookStruct>(lParam);
             var message = wParam.ToInt64();
@@ -200,7 +209,7 @@ public sealed class HotkeyService : IHotkeyService
                     if (!_mainKeyDown && (PressedModifiers() & chord.Modifiers) == chord.Modifiers)
                     {
                         _mainKeyDown = true;
-                        RaiseAsync(HotkeyPressed);
+                        RaiseAsync(PushToTalkPressed);
                     }
 
                     if (_mainKeyDown)
@@ -211,7 +220,7 @@ public sealed class HotkeyService : IHotkeyService
                 else if (isUp && _mainKeyDown)
                 {
                     _mainKeyDown = false;
-                    RaiseAsync(HotkeyReleased);
+                    RaiseAsync(PushToTalkReleased);
                     return 1;
                 }
             }

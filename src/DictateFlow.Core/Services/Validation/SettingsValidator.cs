@@ -49,19 +49,43 @@ public sealed class SettingsValidator : ISettingsValidator
 
     private static void ValidateRecording(RecordingSettings recording, List<SettingsValidationError> findings)
     {
-        if (string.IsNullOrWhiteSpace(recording.Hotkey))
+        var pushToTalkEmpty = string.IsNullOrWhiteSpace(recording.PushToTalkHotkey);
+        var toggleEmpty = string.IsNullOrWhiteSpace(recording.ToggleHotkey);
+
+        if (pushToTalkEmpty && toggleEmpty)
         {
-            findings.Add(Error("General", "A hotkey is required."));
+            findings.Add(Error("General", "At least one recording hotkey (push-to-talk or toggle) is required."));
         }
-        else if (!HotkeyParser.TryParse(recording.Hotkey, out _))
+
+        var pushToTalk = ValidateHotkey("push-to-talk", recording.PushToTalkHotkey, findings);
+        var toggle = ValidateHotkey("toggle", recording.ToggleHotkey, findings);
+
+        if (pushToTalk is not null && pushToTalk == toggle)
         {
-            findings.Add(Error("General", $"'{recording.Hotkey}' is not a valid hotkey (expected e.g. Ctrl+Alt+D)."));
+            findings.Add(Error("General", "The push-to-talk and toggle hotkeys must be different."));
         }
 
         if (recording.SilenceTimeoutSeconds is < 1 or > 300)
         {
             findings.Add(Error("General", "Silence timeout must be between 1 and 300 seconds."));
         }
+    }
+
+    /// <summary>Validates one hotkey; empty is allowed (disabled). Returns the parsed chord, or <see langword="null"/> when empty or invalid.</summary>
+    private static HotkeyChord? ValidateHotkey(string label, string? hotkey, List<SettingsValidationError> findings)
+    {
+        if (string.IsNullOrWhiteSpace(hotkey))
+        {
+            return null;
+        }
+
+        if (HotkeyParser.TryParse(hotkey, out var chord))
+        {
+            return chord;
+        }
+
+        findings.Add(Error("General", $"'{hotkey}' is not a valid {label} hotkey (expected e.g. Ctrl+Alt+D)."));
+        return null;
     }
 
     /// <summary>Validates one transcription/LLM slot: the active name must be registered and, unless it is the mock, fully configured.</summary>

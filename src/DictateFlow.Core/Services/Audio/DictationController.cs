@@ -73,8 +73,9 @@ public sealed class DictationController : IDictationController, IDisposable
         _timeProvider = timeProvider;
         _logger = logger;
 
-        _hotkeyService.HotkeyPressed += OnHotkeyPressed;
-        _hotkeyService.HotkeyReleased += OnHotkeyReleased;
+        _hotkeyService.TogglePressed += OnTogglePressed;
+        _hotkeyService.PushToTalkPressed += OnPushToTalkPressed;
+        _hotkeyService.PushToTalkReleased += OnPushToTalkReleased;
         _recorder.LevelChanged += OnLevelChanged;
         _settingsService.SettingsChanged += OnSettingsChanged;
     }
@@ -247,8 +248,9 @@ public sealed class DictationController : IDictationController, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        _hotkeyService.HotkeyPressed -= OnHotkeyPressed;
-        _hotkeyService.HotkeyReleased -= OnHotkeyReleased;
+        _hotkeyService.TogglePressed -= OnTogglePressed;
+        _hotkeyService.PushToTalkPressed -= OnPushToTalkPressed;
+        _hotkeyService.PushToTalkReleased -= OnPushToTalkReleased;
         _recorder.LevelChanged -= OnLevelChanged;
         _settingsService.SettingsChanged -= OnSettingsChanged;
 
@@ -256,28 +258,14 @@ public sealed class DictationController : IDictationController, IDisposable
         LastCapture = null;
     }
 
-    private bool IsPushToTalk
-        => !string.Equals(_settingsService.Current.Recording.Mode, RecordingModes.Toggle, StringComparison.OrdinalIgnoreCase);
+    private void OnTogglePressed(object? sender, EventArgs e)
+        => RunGuarded(() => IsRecording ? StopRecordingAsync() : StartRecordingAsync());
 
-    private void OnHotkeyPressed(object? sender, EventArgs e)
-    {
-        if (IsPushToTalk)
-        {
-            RunGuarded(StartRecordingAsync);
-        }
-        else
-        {
-            RunGuarded(() => IsRecording ? StopRecordingAsync() : StartRecordingAsync());
-        }
-    }
+    private void OnPushToTalkPressed(object? sender, EventArgs e)
+        => RunGuarded(StartRecordingAsync);
 
-    private void OnHotkeyReleased(object? sender, EventArgs e)
-    {
-        if (IsPushToTalk)
-        {
-            RunGuarded(StopRecordingAsync);
-        }
-    }
+    private void OnPushToTalkReleased(object? sender, EventArgs e)
+        => RunGuarded(StopRecordingAsync);
 
     private void OnSettingsChanged(object? sender, AppSettings settings)
     {

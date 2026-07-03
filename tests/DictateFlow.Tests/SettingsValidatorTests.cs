@@ -76,16 +76,59 @@ public sealed class SettingsValidatorTests
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("NotAKey+Chord")]
     [InlineData("Ctrl+")]
     public void InvalidHotkey_IsGeneralError(string hotkey)
     {
         var settings = new AppSettings();
-        settings.Recording.Hotkey = hotkey;
+        settings.Recording.PushToTalkHotkey = hotkey;
 
         var finding = Single(CreateValidator("Raw").Validate(settings), "General");
         Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void BothHotkeysEmpty_IsGeneralError()
+    {
+        var settings = new AppSettings();
+        settings.Recording.PushToTalkHotkey = "";
+        settings.Recording.ToggleHotkey = "";
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "General");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+        Assert.Contains("at least one", finding.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IdenticalHotkeys_IsGeneralError()
+    {
+        var settings = new AppSettings();
+        settings.Recording.PushToTalkHotkey = "Ctrl+Alt+D";
+        settings.Recording.ToggleHotkey = "Ctrl+Alt+D";
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "General");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+        Assert.Contains("different", finding.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ToggleOnly_WithPushToTalkEmpty_HasNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.Recording.PushToTalkHotkey = "";
+        settings.Recording.ToggleHotkey = "Ctrl+Alt+D";
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Fact]
+    public void TwoDistinctValidHotkeys_HaveNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.Recording.PushToTalkHotkey = "F12";
+        settings.Recording.ToggleHotkey = "Ctrl+Alt+D";
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
     }
 
     [Theory]
@@ -268,7 +311,7 @@ public sealed class SettingsValidatorTests
     public void Findings_AreOrderedErrorsFirst()
     {
         var settings = new AppSettings { ActivePromptMode = "Vanished" }; // warning
-        settings.Recording.Hotkey = "bogus"; // error
+        settings.Recording.PushToTalkHotkey = "bogus"; // error
 
         var findings = CreateValidator("Raw").Validate(settings);
 

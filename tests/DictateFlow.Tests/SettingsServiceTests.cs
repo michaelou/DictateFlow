@@ -22,8 +22,8 @@ public sealed class SettingsServiceTests : IDisposable
 
         await service.LoadAsync();
 
-        Assert.Equal("PushToTalk", service.Current.Recording.Mode);
-        Assert.Equal("Ctrl+Alt+D", service.Current.Recording.Hotkey);
+        Assert.Equal("Ctrl+Alt+D", service.Current.Recording.PushToTalkHotkey);
+        Assert.Equal("", service.Current.Recording.ToggleHotkey);
         Assert.True(service.Current.History.Enabled);
         Assert.False(File.Exists(_paths.SettingsFilePath));
     }
@@ -32,7 +32,7 @@ public sealed class SettingsServiceTests : IDisposable
     public async Task SaveAsync_ThenLoadAsync_RoundTripsModifiedValues()
     {
         var writer = CreateService();
-        writer.Current.Recording.Hotkey = "Ctrl+Shift+Space";
+        writer.Current.Recording.PushToTalkHotkey = "Ctrl+Shift+Space";
         writer.Current.ActiveProviders.Llm = "AzureFoundry";
         writer.Current.TechnicalDictionary.Add("Kubernetes");
         writer.Current.ActivePromptMode = "Professional";
@@ -41,7 +41,7 @@ public sealed class SettingsServiceTests : IDisposable
         var reader = CreateService();
         await reader.LoadAsync();
 
-        Assert.Equal("Ctrl+Shift+Space", reader.Current.Recording.Hotkey);
+        Assert.Equal("Ctrl+Shift+Space", reader.Current.Recording.PushToTalkHotkey);
         Assert.Equal("AzureFoundry", reader.Current.ActiveProviders.Llm);
         Assert.Equal(["Kubernetes"], reader.Current.TechnicalDictionary);
         Assert.Equal("Professional", reader.Current.ActivePromptMode);
@@ -55,7 +55,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         await service.LoadAsync();
 
-        Assert.Equal("PushToTalk", service.Current.Recording.Mode);
+        Assert.Equal("Ctrl+Alt+D", service.Current.Recording.PushToTalkHotkey);
         Assert.Equal("Mock", service.Current.ActiveProviders.Transcription);
     }
 
@@ -64,12 +64,12 @@ public sealed class SettingsServiceTests : IDisposable
     {
         await File.WriteAllTextAsync(
             _paths.SettingsFilePath,
-            """{ "recording": { "hotkey": "Alt+Space" }, "activePromptMode": "Casual", "activeProviders": { "output": "Null" } }""");
+            """{ "recording": { "pushToTalkHotkey": "Alt+Space" }, "activePromptMode": "Casual", "activeProviders": { "output": "Null" } }""");
         var service = CreateService();
 
         await service.LoadAsync();
 
-        Assert.Equal("Alt+Space", service.Current.Recording.Hotkey);
+        Assert.Equal("Alt+Space", service.Current.Recording.PushToTalkHotkey);
         Assert.Equal("Casual", service.Current.ActivePromptMode);
         Assert.Equal("Null", service.Current.ActiveProviders.Output);
     }

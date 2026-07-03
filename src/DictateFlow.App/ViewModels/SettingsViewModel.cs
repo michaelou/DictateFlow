@@ -68,7 +68,6 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IDialogService _dialogService;
     private readonly ILogger<SettingsViewModel> _logger;
 
-    private bool _isPushToTalk;
     private bool _isAutomaticOutput;
 
     /// <summary>The warning text already shown once; pressing Save again with the same warnings closes the window.</summary>
@@ -124,8 +123,8 @@ public partial class SettingsViewModel : ObservableObject
         Microphones = options;
 
         var recording = _settingsService.Current.Recording;
-        _isPushToTalk = !string.Equals(recording.Mode, RecordingModes.Toggle, StringComparison.OrdinalIgnoreCase);
-        _hotkey = recording.Hotkey;
+        _pushToTalkHotkey = recording.PushToTalkHotkey;
+        _toggleHotkey = recording.ToggleHotkey;
         _silenceTimeoutSeconds = recording.SilenceTimeoutSeconds;
         _selectedMicrophone = options.FirstOrDefault(o => o.DeviceId == recording.MicrophoneDeviceId) ?? options[0];
 
@@ -213,9 +212,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private MicrophoneOption _selectedMicrophone;
 
-    /// <summary>Gets or sets the hotkey in <c>"Ctrl+Alt+D"</c> format.</summary>
+    /// <summary>Gets or sets the push-to-talk hotkey in <c>"Ctrl+Alt+D"</c> format; empty disables it.</summary>
     [ObservableProperty]
-    private string _hotkey;
+    private string _pushToTalkHotkey;
+
+    /// <summary>Gets or sets the toggle hotkey in <c>"Ctrl+Alt+D"</c> format; empty disables it.</summary>
+    [ObservableProperty]
+    private string _toggleHotkey;
 
     /// <summary>Gets or sets the validation message shown under the settings controls, if any.</summary>
     [ObservableProperty]
@@ -406,26 +409,6 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets the prompts directory shown on the Diagnostics page.</summary>
     public string PromptsDirectoryPath => _appPaths.PromptsDirectory;
 
-    /// <summary>Gets or sets a value indicating whether push-to-talk mode is selected.</summary>
-    public bool IsPushToTalk
-    {
-        get => _isPushToTalk;
-        set
-        {
-            if (SetProperty(ref _isPushToTalk, value))
-            {
-                OnPropertyChanged(nameof(IsToggle));
-            }
-        }
-    }
-
-    /// <summary>Gets or sets a value indicating whether toggle mode is selected.</summary>
-    public bool IsToggle
-    {
-        get => !_isPushToTalk;
-        set => IsPushToTalk = !value;
-    }
-
     /// <summary>Gets the registered output provider names offered by the Output dropdown.</summary>
     public IReadOnlyList<string> OutputProviders { get; }
 
@@ -457,22 +440,59 @@ public partial class SettingsViewModel : ObservableObject
     public event EventHandler? CloseRequested;
 
     /// <summary>
-    /// Applies a hotkey chord captured by the hotkey textbox. Called by the view's
+    /// Applies a chord captured by the push-to-talk hotkey textbox. Called by the view's
     /// key-capture handler with raw key data; formatting goes through <see cref="HotkeyParser"/>.
     /// </summary>
     /// <param name="modifiers">The modifier keys held down.</param>
     /// <param name="virtualKey">The virtual-key code of the pressed main key.</param>
-    public void CaptureHotkey(HotkeyModifiers modifiers, uint virtualKey)
+    public void CapturePushToTalkHotkey(HotkeyModifiers modifiers, uint virtualKey)
+    {
+        if (TryCaptureChord(modifiers, virtualKey, out var formatted))
+        {
+            PushToTalkHotkey = formatted;
+        }
+    }
+
+    /// <summary>Applies a chord captured by the toggle hotkey textbox. See <see cref="CapturePushToTalkHotkey"/>.</summary>
+    /// <param name="modifiers">The modifier keys held down.</param>
+    /// <param name="virtualKey">The virtual-key code of the pressed main key.</param>
+    public void CaptureToggleHotkey(HotkeyModifiers modifiers, uint virtualKey)
+    {
+        if (TryCaptureChord(modifiers, virtualKey, out var formatted))
+        {
+            ToggleHotkey = formatted;
+        }
+    }
+
+    /// <summary>Clears the push-to-talk hotkey, disabling that trigger.</summary>
+    [RelayCommand]
+    private void ClearPushToTalkHotkey()
+    {
+        PushToTalkHotkey = "";
+        ValidationError = null;
+    }
+
+    /// <summary>Clears the toggle hotkey, disabling that trigger.</summary>
+    [RelayCommand]
+    private void ClearToggleHotkey()
+    {
+        ToggleHotkey = "";
+        ValidationError = null;
+    }
+
+    /// <summary>Formats a captured chord, or reports an invalid key via <see cref="ValidationError"/>.</summary>
+    private bool TryCaptureChord(HotkeyModifiers modifiers, uint virtualKey, out string formatted)
     {
         if (HotkeyParser.TryFromVirtualKey(modifiers, virtualKey, out var chord))
         {
-            Hotkey = chord.ToString();
+            formatted = chord.ToString();
             ValidationError = null;
+            return true;
         }
-        else
-        {
-            ValidationError = "That key cannot be used as a hotkey.";
-        }
+
+        formatted = "";
+        ValidationError = "That key cannot be used as a hotkey.";
+        return false;
     }
 
     /// <summary>
@@ -559,8 +579,8 @@ public partial class SettingsViewModel : ObservableObject
     private void ApplyEditsToSettings()
     {
         var recording = _settingsService.Current.Recording;
-        recording.Mode = IsPushToTalk ? RecordingModes.PushToTalk : RecordingModes.Toggle;
-        recording.Hotkey = Hotkey;
+        recording.PushToTalkHotkey = PushToTalkHotkey;
+        recording.ToggleHotkey = ToggleHotkey;
         recording.MicrophoneDeviceId = SelectedMicrophone.DeviceId;
         recording.SilenceTimeoutSeconds = SilenceTimeoutSeconds;
 

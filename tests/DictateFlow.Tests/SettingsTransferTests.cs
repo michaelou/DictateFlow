@@ -15,7 +15,10 @@ public sealed class SettingsTransferTests
 {
     private static SettingsTransfer CreateTransfer()
         => new(
-            [new LegacySettingsMigration(NullLogger<LegacySettingsMigration>.Instance)],
+            [
+                new LegacySettingsMigration(NullLogger<LegacySettingsMigration>.Instance),
+                new RecordingHotkeyMigration(NullLogger<RecordingHotkeyMigration>.Instance),
+            ],
             NullLogger<SettingsTransfer>.Instance);
 
     /// <summary>Settings with configured Azure providers carrying API keys.</summary>
@@ -35,7 +38,7 @@ public sealed class SettingsTransferTests
             ApiKey = "llm-secret",
             DeploymentName = "gpt",
         });
-        settings.Recording.Hotkey = "Ctrl+Shift+D";
+        settings.Recording.PushToTalkHotkey = "Ctrl+Shift+D";
         return settings;
     }
 
@@ -69,7 +72,7 @@ public sealed class SettingsTransferTests
 
         var imported = transfer.ParseImport(transfer.ExportJson(AzureSettings(), includeSecrets: false));
 
-        Assert.Equal("Ctrl+Shift+D", imported.Recording.Hotkey);
+        Assert.Equal("Ctrl+Shift+D", imported.Recording.PushToTalkHotkey);
         Assert.Equal("Email", imported.ActivePromptMode);
         Assert.Equal("AzureFoundry", imported.ActiveProviders.Transcription);
         Assert.Equal("https://speech.example.com",

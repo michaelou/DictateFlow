@@ -49,6 +49,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton<ISettingsMigration, LegacySettingsMigration>();
+        services.AddSingleton<ISettingsMigration, RecordingHotkeyMigration>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
 
