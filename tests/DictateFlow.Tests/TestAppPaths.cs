@@ -31,11 +31,19 @@ public sealed class TestAppPaths : IAppPaths, IDisposable
     public string PromptsDirectory => Path.Combine(RootDirectory, "Prompts");
 
     /// <inheritdoc />
+    public string EnginesDirectory => Path.Combine(RootDirectory, "Engines");
+
+    /// <inheritdoc />
+    public string ModelsDirectory => Path.Combine(RootDirectory, "Models");
+
+    /// <inheritdoc />
     public void EnsureCreated()
     {
         Directory.CreateDirectory(RootDirectory);
         Directory.CreateDirectory(LogsDirectory);
         Directory.CreateDirectory(PromptsDirectory);
+        Directory.CreateDirectory(EnginesDirectory);
+        Directory.CreateDirectory(ModelsDirectory);
     }
 
     /// <summary>Deletes the temporary directory tree.</summary>

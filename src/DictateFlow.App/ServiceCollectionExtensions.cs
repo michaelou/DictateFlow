@@ -17,6 +17,7 @@ using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -92,10 +93,15 @@ public static class ServiceCollectionExtensions
         services.AddAzureFoundryTranscription();
         services.AddAzureFoundryLlm();
 
+        // Local whisper.cpp: model manager (downloads/verifies the engine and models) plus
+        // its download HTTP client; the provider itself is registered below like any other.
+        services.AddWhisperCppTranscription();
+
         // Mock providers are registered first: the first name of a kind is the fallback used
         // when the configured active name is unknown (and the dropdown default).
         services.AddTranscriptionProvider<MockTranscriptionProvider>(MockTranscriptionProvider.RegistrationName);
         services.AddTranscriptionProvider<AzureFoundryTranscriptionProvider>(AzureFoundryProviders.RegistrationName);
+        services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(WhisperCppProviders.RegistrationName);
         services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName);
         services.AddLLMProvider<AzureFoundryLLMProvider>(AzureFoundryProviders.RegistrationName);
         services.AddOutputProvider<ClipboardPasteOutputProvider>(OutputProviderNames.ClipboardPaste);

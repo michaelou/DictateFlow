@@ -18,7 +18,9 @@ using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Transfer;
 using DictateFlow.Core.Services.Validation;
+using DictateFlow.Core.Services.Models;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.WhisperCpp;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App.ViewModels;
@@ -38,6 +40,53 @@ public partial class ApplicationRuleItem : ObservableObject
     /// <summary>Gets or sets the prompt-mode name applied when the rule matches.</summary>
     [ObservableProperty]
     private string _promptMode = "";
+}
+
+/// <summary>One row on the Local Models settings page: a downloadable engine or model.</summary>
+public partial class LocalModelItem : ObservableObject
+{
+    /// <summary>Initializes a row for one catalog component.</summary>
+    /// <param name="definition">The component the row manages.</param>
+    public LocalModelItem(ModelDefinition definition)
+    {
+        Definition = definition;
+    }
+
+    /// <summary>Gets the catalog definition behind this row.</summary>
+    public ModelDefinition Definition { get; }
+
+    /// <summary>Gets the name shown for the row.</summary>
+    public string DisplayName => Definition.DisplayName;
+
+    /// <summary>Gets the human-readable download size.</summary>
+    public string SizeText => $"{Definition.SizeBytes / (1024.0 * 1024.0):F0} MB";
+
+    /// <summary>Gets or sets a value indicating whether the component is installed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _isInstalled;
+
+    /// <summary>Gets or sets a value indicating whether a download or verification is running.</summary>
+    [ObservableProperty]
+    private bool _isBusy;
+
+    /// <summary>Gets or sets the download progress in percent (0–100).</summary>
+    [ObservableProperty]
+    private double _progressPercent;
+
+    /// <summary>Gets or sets the progress detail line, e.g. <c>452 MB / 720 MB</c>.</summary>
+    [ObservableProperty]
+    private string? _progressText;
+
+    /// <summary>Gets or sets the inline result of the last action on this row, if any.</summary>
+    [ObservableProperty]
+    private string? _actionResult;
+
+    /// <summary>Gets the install-state line shown next to the name.</summary>
+    public string StatusText => IsInstalled ? "✓ Installed" : $"⬇ Not installed ({SizeText})";
+
+    /// <summary>Cancels the in-flight download of this row, when one is running.</summary>
+    public CancellationTokenSource? DownloadCancellation { get; set; }
 }
 
 /// <summary>
@@ -66,6 +115,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IPromptsArchive _promptsArchive;
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly IDialogService _dialogService;
+    private readonly WhisperCppModelManager _whisperModelManager;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isAutomaticOutput;
@@ -87,6 +137,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="promptsArchive">Exports and imports the prompts folder as a zip.</param>
     /// <param name="diagnosticsService">Supplies versions, the log tail and the copyable report.</param>
     /// <param name="dialogService">File pickers and confirmation prompts.</param>
+    /// <param name="whisperModelManager">Manages the local whisper.cpp engine and models (Local Models page).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public SettingsViewModel(
         ISettingsService settingsService,
@@ -102,6 +153,7 @@ public partial class SettingsViewModel : ObservableObject
         IPromptsArchive promptsArchive,
         IDiagnosticsService diagnosticsService,
         IDialogService dialogService,
+        WhisperCppModelManager whisperModelManager,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
@@ -116,6 +168,7 @@ public partial class SettingsViewModel : ObservableObject
         _promptsArchive = promptsArchive;
         _diagnosticsService = diagnosticsService;
         _dialogService = dialogService;
+        _whisperModelManager = whisperModelManager;
         _logger = logger;
 
         var options = new List<MicrophoneOption> { new(null, "System default") };
@@ -149,6 +202,16 @@ public partial class SettingsViewModel : ObservableObject
             ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName);
         _mockSpeechDelayMs = mockSpeech.DelayMs;
         _mockSpeechText = mockSpeech.Text;
+
+        var whisper = _configReader.GetConfig<WhisperCppTranscriptionConfig>(
+            ProviderKind.Transcription, WhisperCppProviders.RegistrationName);
+        WhisperModels = WhisperCppModelCatalog.Models;
+        _selectedWhisperModel = WhisperCppModelCatalog.FindModel(whisper.Model) ?? WhisperCppModelCatalog.Small;
+        _whisperLanguage = whisper.Language;
+        _whisperTimeoutSeconds = whisper.TimeoutSeconds;
+
+        LocalModels = [.. WhisperCppModelCatalog.All.Select(d => new LocalModelItem(d))];
+        RefreshLocalModelState();
 
         var llm = _configReader.GetConfig<AzureFoundryLlmConfig>(
             ProviderKind.Llm, AzureFoundryProviders.RegistrationName);
@@ -195,7 +258,7 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing", "Backup", "Diagnostics"];
+        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing", "Backup", "Diagnostics"];
 
     /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
     public IReadOnlyList<string> LogLevels { get; } =
@@ -266,6 +329,44 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the inline result of the last Speech "Test connection" run, if any.</summary>
     [ObservableProperty]
     private string? _speechTestResult;
+
+    /// <summary>Gets the whisper models offered by the local model dropdown, in recommendation order.</summary>
+    public IReadOnlyList<ModelDefinition> WhisperModels { get; }
+
+    /// <summary>Gets or sets the whisper model transcriptions run with (persisted as the WhisperCpp config's model id).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WhisperStatusText))]
+    private ModelDefinition? _selectedWhisperModel;
+
+    /// <summary>Gets or sets the whisper spoken language as a BCP-47 tag; empty auto-detects.</summary>
+    [ObservableProperty]
+    private string _whisperLanguage;
+
+    /// <summary>Gets or sets the local transcription timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _whisperTimeoutSeconds;
+
+    /// <summary>Gets the rows of the Local Models page, engine first.</summary>
+    public ObservableCollection<LocalModelItem> LocalModels { get; }
+
+    /// <summary>Gets the installed-engine line shown on the Local Models page.</summary>
+    public string WhisperEngineStatus
+        => _whisperModelManager.GetInstalledEngineVersion() is { } version
+            ? $"✓ Whisper.cpp {version}"
+            : "⬇ Whisper.cpp engine not installed";
+
+    /// <summary>Gets the install-state summary for the Speech page's WhisperCpp section.</summary>
+    public string WhisperStatusText
+    {
+        get
+        {
+            var engineInstalled = _whisperModelManager.IsInstalled(WhisperCppModelCatalog.Engine);
+            var modelInstalled = SelectedWhisperModel is { } model && _whisperModelManager.IsInstalled(model);
+            return engineInstalled && modelInstalled
+                ? $"✓ Whisper.cpp {_whisperModelManager.GetInstalledEngineVersion()} and {SelectedWhisperModel!.DisplayName} are installed — transcription runs fully offline."
+                : "⬇ Local transcription is not installed yet. Download the engine and model on the Local Models page.";
+        }
+    }
 
     /// <summary>Gets the registered LLM provider names offered by the LLM dropdown.</summary>
     public IReadOnlyList<string> LlmProviders { get; }
@@ -661,6 +762,175 @@ public partial class SettingsViewModel : ObservableObject
             _logger.LogWarning(ex, "Speech test connection failed unexpectedly");
             SpeechTestResult = $"✗ {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Offers to install the missing local components as soon as Local Whisper.cpp is
+    /// picked in the Speech dropdown — the download itself runs on the Local Models page.
+    /// </summary>
+    /// <param name="value">The newly selected provider name.</param>
+    partial void OnSelectedSpeechProviderChanged(string value)
+    {
+        if (!string.Equals(value, WhisperCppProviders.RegistrationName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(WhisperStatusText));
+        var model = SelectedWhisperModel ?? WhisperCppModelCatalog.Small;
+        var missing = LocalModels
+            .Where(i => !i.IsInstalled && !i.IsBusy)
+            .Where(i => i.Definition.Kind == ModelComponentKind.Engine || i.Definition.Id == model.Id)
+            .ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var components = string.Join("\n", missing.Select(i => $"  • {i.DisplayName} ({i.SizeText})"));
+        if (!_dialogService.Confirm(
+            "Local transcription is not installed",
+            $"DictateFlow needs to download:\n\n{components}\n\nWould you like to download them now?"))
+        {
+            return;
+        }
+
+        SelectedSection = "Local Models";
+        foreach (var item in missing)
+        {
+            DownloadLocalModelCommand.Execute(item);
+        }
+    }
+
+    /// <summary>Jumps from the Speech page to the Local Models page.</summary>
+    [RelayCommand]
+    private void OpenLocalModels() => SelectedSection = "Local Models";
+
+    /// <summary>
+    /// Downloads, verifies and installs one component, reporting progress on the row. The
+    /// installation is effective immediately — no restart or Save is needed.
+    /// </summary>
+    /// <param name="item">The row to install.</param>
+    [RelayCommand]
+    private async Task DownloadLocalModelAsync(LocalModelItem? item)
+    {
+        if (item is null || item.IsBusy)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        item.DownloadCancellation = cancellation;
+        item.IsBusy = true;
+        item.ActionResult = null;
+        item.ProgressPercent = 0;
+        item.ProgressText = $"0 MB / {item.SizeText}";
+        try
+        {
+            var progress = new Progress<double>(fraction =>
+            {
+                item.ProgressPercent = fraction * 100;
+                item.ProgressText =
+                    $"{fraction * item.Definition.SizeBytes / (1024.0 * 1024.0):F0} MB / {item.SizeText}";
+            });
+            await _whisperModelManager.DownloadAsync(item.Definition, progress, cancellation.Token);
+            item.ActionResult = "✓ Downloaded and verified.";
+        }
+        catch (OperationCanceledException)
+        {
+            item.ActionResult = "Download cancelled.";
+        }
+        catch (ProviderException ex)
+        {
+            _logger.LogWarning(ex, "Download of {DisplayName} failed", item.DisplayName);
+            item.ActionResult = $"✗ {ex.Message}";
+        }
+        finally
+        {
+            item.IsBusy = false;
+            item.ProgressText = null;
+            item.DownloadCancellation = null;
+            RefreshLocalModelState();
+        }
+    }
+
+    /// <summary>Cancels the in-flight download of one row.</summary>
+    /// <param name="item">The row being downloaded.</param>
+    [RelayCommand]
+    private void CancelLocalModelDownload(LocalModelItem? item)
+        => item?.DownloadCancellation?.Cancel();
+
+    /// <summary>Removes an installed component after confirmation.</summary>
+    /// <param name="item">The row to remove.</param>
+    [RelayCommand]
+    private async Task DeleteLocalModelAsync(LocalModelItem? item)
+    {
+        if (item is null || item.IsBusy || !item.IsInstalled)
+        {
+            return;
+        }
+
+        if (!_dialogService.Confirm(
+            "Delete local component",
+            $"Delete {item.DisplayName}? Local transcription needs it and will offer to download it again."))
+        {
+            return;
+        }
+
+        try
+        {
+            await _whisperModelManager.DeleteAsync(item.Definition);
+            item.ActionResult = null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Delete of {DisplayName} failed", item.DisplayName);
+            item.ActionResult = $"✗ Could not delete: {ex.Message}";
+        }
+
+        RefreshLocalModelState();
+    }
+
+    /// <summary>Re-verifies an installed component against its pinned checksum.</summary>
+    /// <param name="item">The row to verify.</param>
+    [RelayCommand]
+    private async Task VerifyLocalModelAsync(LocalModelItem? item)
+    {
+        if (item is null || item.IsBusy || !item.IsInstalled)
+        {
+            return;
+        }
+
+        item.IsBusy = true;
+        item.ActionResult = "Verifying…";
+        try
+        {
+            var ok = await _whisperModelManager.VerifyAsync(item.Definition, CancellationToken.None);
+            item.ActionResult = ok
+                ? "✓ Verification succeeded."
+                : "✗ Verification failed — delete and download the component again.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Verification of {DisplayName} failed", item.DisplayName);
+            item.ActionResult = $"✗ Could not verify: {ex.Message}";
+        }
+        finally
+        {
+            item.IsBusy = false;
+        }
+    }
+
+    /// <summary>Re-reads the install state of every row and the status summaries.</summary>
+    private void RefreshLocalModelState()
+    {
+        foreach (var item in LocalModels)
+        {
+            item.IsInstalled = _whisperModelManager.IsInstalled(item.Definition);
+        }
+
+        OnPropertyChanged(nameof(WhisperEngineStatus));
+        OnPropertyChanged(nameof(WhisperStatusText));
     }
 
     /// <summary>
@@ -1165,6 +1435,14 @@ public partial class SettingsViewModel : ObservableObject
             });
         _configReader.SetConfig(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName,
             new MockTranscriptionConfig { DelayMs = MockSpeechDelayMs, Text = MockSpeechText });
+
+        // Read-modify-write keeps config-only fields (e.g. Threads) that have no UI.
+        var whisper = _configReader.GetConfig<WhisperCppTranscriptionConfig>(
+            ProviderKind.Transcription, WhisperCppProviders.RegistrationName);
+        whisper.Model = SelectedWhisperModel?.Id ?? WhisperCppModelCatalog.SmallModelId;
+        whisper.Language = WhisperLanguage.Trim();
+        whisper.TimeoutSeconds = WhisperTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Transcription, WhisperCppProviders.RegistrationName, whisper);
     }
 
     /// <summary>
