@@ -19,15 +19,23 @@
         <!-- Toolbar: search + clear all -->
         <DockPanel Grid.Row="0" Margin="0,0,0,8">
             <Button DockPanel.Dock="Right"
-                    Width="88"
+                    Width="32"
+                    Height="32"
                     Margin="8,0,0,0"
-                    Content="Clear all"
-                    Command="{Binding ClearAllCommand}" />
+                    Padding="6"
+                    ToolTip="Clear all"
+                    Command="{Binding ClearAllCommand}">
+                <Image Source="/Resources/clear.png" Stretch="Uniform" />
+            </Button>
             <Button DockPanel.Dock="Right"
-                    Width="88"
+                    Width="32"
+                    Height="32"
                     Margin="8,0,0,0"
-                    Content="Refresh"
-                    Command="{Binding RefreshCommand}" />
+                    Padding="6"
+                    ToolTip="Refresh"
+                    Command="{Binding RefreshCommand}">
+                <Image Source="/Resources/refresh.png" Stretch="Uniform" />
+            </Button>
             <TextBox VerticalContentAlignment="Center"
                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                      ToolTip="Search the dictation history" />
@@ -46,15 +54,23 @@
                                     Margin="8,0,0,0"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
-                            <Button Width="52"
-                                    Content="Copy"
+                            <Button Width="28"
+                                    Height="28"
+                                    Padding="5"
+                                    ToolTip="Copy"
                                     Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}" />
-                            <Button Width="52"
+                                    CommandParameter="{Binding}">
+                                <Image Source="/Resources/copy.png" Stretch="Uniform" />
+                            </Button>
+                            <Button Width="28"
+                                    Height="28"
                                     Margin="4,0,0,0"
-                                    Content="Delete"
+                                    Padding="5"
+                                    ToolTip="Delete"
                                     Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}" />
+                                    CommandParameter="{Binding}">
+                                <Image Source="/Resources/delete.png" Stretch="Uniform" />
+                            </Button>
                         </StackPanel>
                         <StackPanel>
                             <TextBlock FontSize="11"
