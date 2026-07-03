@@ -214,6 +214,67 @@
                                  Text="{Binding SpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
+                    <!-- Azure Speech (real-time, streaming-capable) config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="AzureSpeech">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Azure real-time speech-to-text. Supports streaming transcription (live transcript while you speak) when it is enabled on the General page." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
+                        <TextBox Width="340"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AzureSpeechEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="The Speech/AI Foundry resource endpoint, e.g. https://myresource.cognitiveservices.azure.com/ — the same endpoint the AzureFoundry provider uses." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding AzureSpeechApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Languages" />
+                        <TextBox Width="340"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AzureSpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Comma-separated locales, e.g. en-US, el-GR. One locale pins the language; several enable continuous language detection restricted to them; empty uses the service default (en-US)." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AzureSpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Applies to whole-capture transcription only; streaming sessions last as long as the recording." />
+                    </StackPanel>
+
                     <!-- Mock config section -->
                     <StackPanel>
                         <StackPanel.Style>

@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Samples.NullOut
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.WhisperCpp", "src\DictateFlow.Providers.WhisperCpp\DictateFlow.Providers.WhisperCpp.csproj", "{D57BD824-32C2-4D56-A776-9526393A9778}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.AzureSpeech", "src\DictateFlow.Providers.AzureSpeech\DictateFlow.Providers.AzureSpeech.csproj", "{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -103,6 +105,18 @@ Global
 		{D57BD824-32C2-4D56-A776-9526393A9778}.Release|x64.Build.0 = Release|Any CPU
 		{D57BD824-32C2-4D56-A776-9526393A9778}.Release|x86.ActiveCfg = Release|Any CPU
 		{D57BD824-32C2-4D56-A776-9526393A9778}.Release|x86.Build.0 = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|x64.Build.0 = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Debug|x86.Build.0 = Debug|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|x64.ActiveCfg = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|x64.Build.0 = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|x86.ActiveCfg = Release|Any CPU
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -114,5 +128,6 @@ Global
 		{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{989C2BEA-0452-415A-AA59-7D398226DB6C} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{D57BD824-32C2-4D56-A776-9526393A9778} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

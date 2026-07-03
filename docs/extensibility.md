@@ -4,7 +4,7 @@ DictateFlow has three replaceable provider slots, one per pipeline stage:
 
 | Kind | Interface | Built-in providers |
 |---|---|---|
-| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry` |
+| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry`, `AzureSpeech`, `WhisperCpp` |
 | `Llm` | `ILLMProvider` | `Mock`, `AzureFoundry` |
 | `Output` | `IOutputProvider` | `ClipboardPaste`, `SimulatedKeyboard`, `Null` (sample) |
 
@@ -66,9 +66,10 @@ unchanged and runs exactly once on the final text.
 Streaming is strictly an optimization: if the session throws, times out or yields nothing,
 the completed WAV capture is transcribed through the regular `TranscribeAsync` path instead,
 so a provider never has to implement its own fallback. Providers that only implement
-`ITranscriptionProvider` keep working untouched. The `Mock` provider implements the interface
-(revealing its canned text word by word), so the streaming flow is demoable without any
-cloud service.
+`ITranscriptionProvider` keep working untouched. Two built-in providers implement the
+interface: `AzureSpeech` (real-time recognition through the Azure Speech SDK) and `Mock`
+(revealing its canned text word by word, so the streaming flow is demoable without any
+cloud service).
 
 ## 2. Register it (the one line)
 

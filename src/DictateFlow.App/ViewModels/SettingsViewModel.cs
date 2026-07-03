@@ -20,6 +20,7 @@ using DictateFlow.Core.Services.Transfer;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Core.Services.Models;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.WhisperCpp;
 using Microsoft.Extensions.Logging;
 
@@ -199,6 +200,13 @@ public partial class SettingsViewModel : ObservableObject
         _speechLanguage = speech.Language;
         _speechTimeoutSeconds = speech.TimeoutSeconds;
 
+        var azureSpeech = _configReader.GetConfig<AzureSpeechTranscriptionConfig>(
+            ProviderKind.Transcription, AzureSpeechProviders.RegistrationName);
+        _azureSpeechEndpoint = azureSpeech.Endpoint;
+        _azureSpeechApiKey = azureSpeech.ApiKey;
+        _azureSpeechLanguage = azureSpeech.Language;
+        _azureSpeechTimeoutSeconds = azureSpeech.TimeoutSeconds;
+
         var mockSpeech = _configReader.GetConfig<MockTranscriptionConfig>(
             ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName);
         _mockSpeechDelayMs = mockSpeech.DelayMs;
@@ -330,6 +338,22 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the speech request timeout in seconds.</summary>
     [ObservableProperty]
     private int _speechTimeoutSeconds;
+
+    /// <summary>Gets or sets the Azure Speech (real-time) resource endpoint URL.</summary>
+    [ObservableProperty]
+    private string _azureSpeechEndpoint;
+
+    /// <summary>Gets or sets the Azure Speech (real-time) API key.</summary>
+    [ObservableProperty]
+    private string _azureSpeechApiKey;
+
+    /// <summary>Gets or sets the Azure Speech candidate languages as comma-separated BCP-47 tags.</summary>
+    [ObservableProperty]
+    private string _azureSpeechLanguage;
+
+    /// <summary>Gets or sets the Azure Speech non-streaming transcription timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _azureSpeechTimeoutSeconds;
 
     /// <summary>Gets or sets the inline result of the last Speech "Test connection" run, if any.</summary>
     [ObservableProperty]
@@ -1438,6 +1462,14 @@ public partial class SettingsViewModel : ObservableObject
                 DeploymentName = SpeechDeploymentName.Trim(),
                 Language = SpeechLanguage.Trim(),
                 TimeoutSeconds = SpeechTimeoutSeconds,
+            });
+        _configReader.SetConfig(ProviderKind.Transcription, AzureSpeechProviders.RegistrationName,
+            new AzureSpeechTranscriptionConfig
+            {
+                Endpoint = AzureSpeechEndpoint.Trim(),
+                ApiKey = AzureSpeechApiKey.Trim(),
+                Language = AzureSpeechLanguage.Trim(),
+                TimeoutSeconds = AzureSpeechTimeoutSeconds,
             });
         _configReader.SetConfig(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName,
             new MockTranscriptionConfig { DelayMs = MockSpeechDelayMs, Text = MockSpeechText });

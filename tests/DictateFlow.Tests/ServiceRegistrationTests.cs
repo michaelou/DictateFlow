@@ -13,6 +13,7 @@ using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Models;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,7 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.IsType<ActiveTranscriptionProvider>(provider.GetRequiredService<ITranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<MockTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureFoundryTranscriptionProvider>());
+        Assert.NotNull(provider.GetRequiredService<AzureSpeechTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<WhisperCppTranscriptionProvider>());
         Assert.IsType<WhisperCppModelManager>(provider.GetRequiredService<IModelManager>());
         Assert.Same(
@@ -85,7 +87,7 @@ public sealed class ServiceRegistrationTests : IDisposable
         var registry = provider.GetRequiredService<IProviderRegistry>();
 
         Assert.Equal(
-            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, WhisperCppProviders.RegistrationName],
+            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AzureSpeechProviders.RegistrationName, WhisperCppProviders.RegistrationName],
             registry.GetNames(ProviderKind.Transcription));
         Assert.Equal(
             [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName],

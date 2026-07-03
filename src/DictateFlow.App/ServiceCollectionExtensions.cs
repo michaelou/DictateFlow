@@ -17,6 +17,7 @@ using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,6 +105,11 @@ public static class ServiceCollectionExtensions
         services.AddTranscriptionProvider<MockTranscriptionProvider>(
             MockTranscriptionProvider.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<AzureFoundryTranscriptionProvider>(AzureFoundryProviders.RegistrationName);
+        // Azure real-time speech (streaming-capable, issue #20). Registered with
+        // requiresConnection: false because it has no DeploymentName — the generic connection
+        // validation doesn't fit; the provider validates its endpoint/key itself per call.
+        services.AddTranscriptionProvider<AzureSpeechTranscriptionProvider>(
+            AzureSpeechProviders.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(
             WhisperCppProviders.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName, requiresConnection: false);
