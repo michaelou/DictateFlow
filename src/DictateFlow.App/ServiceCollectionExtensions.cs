@@ -10,6 +10,7 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Usage;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -66,12 +67,15 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<MockTranscriptionProvider>,
             sp.GetRequiredService<ILogger<TranscriptionProviderSelector>>()));
 
-        // LLM enhancement: prompt modes + resolver, the Azure chat-completions provider behind
-        // the same resilience pipeline, the mock fallback, and endpoint-empty selection.
-        services.AddSingleton<IUsageSink, NullUsageSink>();
+        // LLM enhancement: prompt modes + resolver + per-application mode selection, the Azure
+        // chat-completions provider behind the same resilience pipeline, the mock fallback,
+        // and endpoint-empty selection. Usage lands in SQLite for the cost dashboard.
+        services.AddSingleton<IUsageSink, SqliteUsageSink>();
+        services.AddSingleton<ICostService, SqliteCostService>();
         services.AddSingleton<IForegroundAppService, ForegroundAppService>();
         services.AddSingleton<IPromptModeStore, PromptModeStore>();
         services.AddSingleton<IPromptResolver, PromptResolver>();
+        services.AddSingleton<IPromptModeSelector, PromptModeSelector>();
         services.AddAzureFoundryLlm();
         services.AddSingleton<MockLLMProvider>();
         services.AddSingleton<ILLMProvider>(sp => new LLMProviderSelector(
@@ -97,6 +101,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TrayViewModel>();
         services.AddSingleton<OverlayViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<HistoryViewModel>();
+        services.AddTransient<CostDashboardViewModel>();
 
         return services;
     }

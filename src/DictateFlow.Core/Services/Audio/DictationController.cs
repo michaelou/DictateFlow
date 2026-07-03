@@ -95,7 +95,7 @@ public sealed class DictationController : IDictationController, IDisposable
     public Stream? LastCapture { get; private set; }
 
     /// <inheritdoc />
-    public event EventHandler<string>? DictationFailed;
+    public event EventHandler<DictationFailedEventArgs>? DictationFailed;
 
     /// <inheritdoc />
     public async Task StartRecordingAsync()
@@ -200,16 +200,19 @@ public sealed class DictationController : IDictationController, IDisposable
         catch (Exception ex)
         {
             // The pipeline contract is to never throw; guard anyway so the app stays alive.
+            // No raw exception text reaches the user — the details are in the log.
             _logger.LogError(ex, "Dictation pipeline threw unexpectedly");
-            result = new PipelineResult(false, null, null, $"Dictation failed unexpectedly: {ex.Message}");
+            result = new PipelineResult(false, null, null, "Dictation failed unexpectedly — see the log for details.");
         }
 
         if (!result.Success)
         {
             var message = result.ErrorMessage ?? "Dictation failed.";
             _logger.LogWarning("Dictation failed: {Message}", message);
-            _overlay.ShowError();
-            DictationFailed?.Invoke(this, message);
+            // The overlay auto-hides quickly, so it only carries a short summary; the tray
+            // notification raised below has room for the full actionable message.
+            _overlay.ShowError(Shorten(message));
+            DictationFailed?.Invoke(this, new DictationFailedEventArgs(message, result.IsConfigurationError));
             RunGuarded(() => HideOverlayAfterDelayAsync(ErrorOverlayDuration));
             return;
         }
@@ -316,6 +319,14 @@ public sealed class DictationController : IDictationController, IDisposable
             _logger.LogInformation("Silence timeout reached; stopping recording");
             RunGuarded(StopRecordingAsync);
         }
+    }
+
+    /// <summary>Trims a failure message to a single short line that fits the overlay.</summary>
+    private static string Shorten(string message)
+    {
+        const int maxLength = 90;
+        var singleLine = message.ReplaceLineEndings(" ").Trim();
+        return singleLine.Length <= maxLength ? singleLine : $"{singleLine[..maxLength].TrimEnd()}…";
     }
 
     /// <summary>Fires an async operation from a sync event handler, logging instead of throwing.</summary>

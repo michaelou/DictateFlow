@@ -177,7 +177,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
         await provider.TranscribeAsync(OneSecondWav(), CancellationToken.None);
 
         var record = Assert.Single(_usageSink.Records);
-        Assert.Equal(UsageCategories.Transcription, record.Category);
+        Assert.Equal(UsageCategories.Speech, record.Category);
         Assert.Equal(2.5, record.DurationSeconds);
         Assert.Null(record.PromptTokens);
         Assert.Null(record.CompletionTokens);

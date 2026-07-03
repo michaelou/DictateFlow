@@ -7,8 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace DictateFlow.App.ViewModels;
 
 /// <summary>
-/// View model backing the tray icon context menu. History and Cost Dashboard
-/// are stubs until M6.
+/// View model backing the tray icon context menu.
 /// </summary>
 public partial class TrayViewModel : ObservableObject
 {
@@ -53,15 +52,15 @@ public partial class TrayViewModel : ObservableObject
     private void OpenSettings()
         => _windowService.ShowSettingsWindow();
 
-    /// <summary>Opens the dictation history (stub until M6).</summary>
+    /// <summary>Opens the History window.</summary>
     [RelayCommand]
     private void OpenHistory()
-        => _logger.LogInformation("History requested — not implemented yet (arrives with M6)");
+        => _windowService.ShowHistoryWindow();
 
-    /// <summary>Opens the cost dashboard (stub until M6).</summary>
+    /// <summary>Opens the Cost Dashboard window.</summary>
     [RelayCommand]
     private void OpenCostDashboard()
-        => _logger.LogInformation("Cost Dashboard requested — not implemented yet (arrives with M6)");
+        => _windowService.ShowCostDashboardWindow();
 
     /// <summary>Shuts the application down cleanly.</summary>
     [RelayCommand]

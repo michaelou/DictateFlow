@@ -16,6 +16,7 @@ public sealed class TrayIconService : ITrayIconService
     private readonly TrayViewModel _viewModel;
     private readonly ILogger<TrayIconService> _logger;
     private TaskbarIcon? _trayIcon;
+    private Action? _pendingNotificationAction;
 
     /// <summary>Initializes a new instance of the <see cref="TrayIconService"/> class.</summary>
     /// <param name="viewModel">The view model the tray menu commands bind to.</param>
@@ -41,34 +42,68 @@ public sealed class TrayIconService : ITrayIconService
             _trayIcon.ContextMenu.DataContext = _viewModel;
         }
 
+        _trayIcon.TrayBalloonTipClicked += OnBalloonTipClicked;
+        _trayIcon.TrayBalloonTipClosed += OnBalloonTipClosed;
+
         _trayIcon.ForceCreate();
         _logger.LogDebug("Tray icon created");
     }
 
     /// <inheritdoc />
-    public void ShowErrorNotification(string title, string message)
-        => ShowNotificationSafe(title, message, NotificationIcon.Error);
+    public void ShowErrorNotification(string title, string message, Action? onClick = null)
+        => ShowNotificationSafe(title, message, NotificationIcon.Error, onClick);
 
     /// <inheritdoc />
     public void ShowWarningNotification(string title, string message)
-        => ShowNotificationSafe(title, message, NotificationIcon.Warning);
+        => ShowNotificationSafe(title, message, NotificationIcon.Warning, onClick: null);
 
-    private void ShowNotificationSafe(string title, string message, NotificationIcon icon)
+    private void ShowNotificationSafe(string title, string message, NotificationIcon icon, Action? onClick)
     {
         try
         {
+            _pendingNotificationAction = onClick;
             _trayIcon?.ShowNotification(title, message, icon);
         }
         catch (Exception ex)
         {
             // Never let a notification take the app down.
+            _pendingNotificationAction = null;
             _logger.LogWarning(ex, "Failed to show tray notification");
         }
     }
 
+    private void OnBalloonTipClicked(object sender, System.Windows.RoutedEventArgs e)
+    {
+        var action = _pendingNotificationAction;
+        _pendingNotificationAction = null;
+        if (action is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _logger.LogDebug("Tray notification clicked; running its action");
+            action();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tray notification click action failed");
+        }
+    }
+
+    private void OnBalloonTipClosed(object sender, System.Windows.RoutedEventArgs e)
+        => _pendingNotificationAction = null;
+
     /// <inheritdoc />
     public void Dispose()
     {
+        if (_trayIcon is not null)
+        {
+            _trayIcon.TrayBalloonTipClicked -= OnBalloonTipClicked;
+            _trayIcon.TrayBalloonTipClosed -= OnBalloonTipClosed;
+        }
+
         _trayIcon?.Dispose();
         _trayIcon = null;
     }

@@ -41,7 +41,11 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     public void ShowSuccess() => OnUiThread(() => ShowState(OverlayState.Success));
 
     /// <inheritdoc />
-    public void ShowError() => OnUiThread(() => ShowState(OverlayState.Error));
+    public void ShowError(string? message = null) => OnUiThread(() =>
+    {
+        _viewModel.ErrorMessage = string.IsNullOrWhiteSpace(message) ? null : message;
+        ShowState(OverlayState.Error);
+    });
 
     /// <inheritdoc />
     public void Hide() => OnUiThread(() =>

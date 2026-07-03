@@ -42,10 +42,42 @@ public sealed class AppSettingsSerializationTests
         Assert.Equal("ClipboardPaste", output.GetProperty("Provider").GetString());
         Assert.Equal("Automatic", output.GetProperty("Mode").GetString());
 
-        Assert.True(root.GetProperty("History").GetProperty("Enabled").GetBoolean());
+        var history = root.GetProperty("History");
+        Assert.True(history.GetProperty("Enabled").GetBoolean());
+        Assert.Equal(1000, history.GetProperty("MaxEntries").GetInt32());
+
+        var pricing = root.GetProperty("Pricing");
+        Assert.Equal(0.006, pricing.GetProperty("SpeechPerMinute").GetDouble());
+        Assert.Equal(2.50, pricing.GetProperty("LlmPromptPer1M").GetDouble());
+        Assert.Equal(10.00, pricing.GetProperty("LlmCompletionPer1M").GetDouble());
+        Assert.Equal("USD", pricing.GetProperty("Currency").GetString());
+
+        Assert.Equal("Information", root.GetProperty("Logging").GetProperty("MinimumLevel").GetString());
+
         Assert.Equal("Raw", root.GetProperty("ActivePromptMode").GetString());
         Assert.Equal(0, root.GetProperty("TechnicalDictionary").GetArrayLength());
         Assert.Equal(0, root.GetProperty("ApplicationRules").GetArrayLength());
+    }
+
+    [Fact]
+    public void ApplicationRules_RoundTripThroughJson()
+    {
+        var settings = new AppSettings
+        {
+            ApplicationRules =
+            [
+                new ApplicationRule { ProcessName = "OUTLOOK", PromptMode = "Email" },
+                new ApplicationRule { ProcessName = "devenv", PromptMode = "Raw" },
+            ],
+        };
+
+        var json = JsonSerializer.Serialize(settings, SettingsService.SerializerOptions);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, SettingsService.SerializerOptions);
+
+        Assert.NotNull(loaded);
+        Assert.Collection(loaded.ApplicationRules,
+            r => { Assert.Equal("OUTLOOK", r.ProcessName); Assert.Equal("Email", r.PromptMode); },
+            r => { Assert.Equal("devenv", r.ProcessName); Assert.Equal("Raw", r.PromptMode); });
     }
 
     [Fact]

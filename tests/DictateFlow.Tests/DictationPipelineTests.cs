@@ -20,6 +20,7 @@ namespace DictateFlow.Tests;
 public sealed class DictationPipelineTests
 {
     private readonly Mock<ITranscriptionProvider> _transcription = new();
+    private readonly Mock<IPromptModeSelector> _modeSelector = new();
     private readonly Mock<IPromptResolver> _resolver = new();
     private readonly Mock<ILLMProvider> _llm = new();
     private readonly Mock<IHistoryRepository> _history = new();
@@ -33,6 +34,9 @@ public sealed class DictationPipelineTests
     {
         _settings.SetupGet(s => s.Current).Returns(_appSettings);
 
+        // Default selector behavior mirrors the no-rule fallback: the active mode from settings.
+        _modeSelector.Setup(s => s.SelectMode(It.IsAny<string>()))
+            .Returns(() => _appSettings.ActivePromptMode);
         _transcription.Setup(t => t.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
             .Callback(() => _callOrder.Add("transcribe"))
             .ReturnsAsync(new TranscriptionResult("raw transcript", 1.0, "en-US"));
@@ -55,7 +59,7 @@ public sealed class DictationPipelineTests
     }
 
     private DictationPipeline CreatePipeline(params IOutputProvider[] outputProviders)
-        => new(_transcription.Object, _resolver.Object, _llm.Object, _history.Object,
+        => new(_transcription.Object, _modeSelector.Object, _resolver.Object, _llm.Object, _history.Object,
             outputProviders.Length > 0 ? outputProviders : [_output.Object],
             _gate.Object, _settings.Object, TimeProvider.System,
             Mock.Of<ILogger<DictationPipeline>>());
@@ -92,6 +96,44 @@ public sealed class DictationPipelineTests
         await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
 
         _resolver.Verify(r => r.Resolve("raw transcript", "Email"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_ModeSelectorReceivesApplicationNameAndItsChoiceWins()
+    {
+        _appSettings.ActivePromptMode = "Raw";
+        _modeSelector.Setup(s => s.SelectMode("OUTLOOK")).Returns("Email");
+
+        await CreatePipeline().RunAsync(
+            new PipelineRequest(new MemoryStream(new byte[44 + 32000]), "OUTLOOK", 1234),
+            CancellationToken.None);
+
+        _modeSelector.Verify(s => s.SelectMode("OUTLOOK"), Times.Once);
+        _resolver.Verify(r => r.Resolve("raw transcript", "Email"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_ConfigurationFailure_SetsIsConfigurationError()
+    {
+        _transcription.Setup(t => t.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Speech", "bad key", isConfigurationError: true));
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsConfigurationError);
+    }
+
+    [Fact]
+    public async Task RunAsync_NonConfigurationFailure_LeavesIsConfigurationErrorFalse()
+    {
+        _transcription.Setup(t => t.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Speech", "service unavailable"));
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.False(result.IsConfigurationError);
     }
 
     [Fact]
@@ -135,7 +177,9 @@ public sealed class DictationPipelineTests
         var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
 
         Assert.False(result.Success);
-        Assert.Contains("boom", result.ErrorMessage);
+        // Raw exception text never reaches the user; a generic message stands in.
+        Assert.Contains("Transcription failed unexpectedly", result.ErrorMessage);
+        Assert.DoesNotContain("boom", result.ErrorMessage);
     }
 
     [Fact]
@@ -207,7 +251,9 @@ public sealed class DictationPipelineTests
         var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
 
         Assert.False(result.Success);
-        Assert.Contains("dialog exploded", result.ErrorMessage);
+        // Raw exception text never reaches the user; a generic message stands in.
+        Assert.Contains("Output confirmation failed", result.ErrorMessage);
+        Assert.DoesNotContain("dialog exploded", result.ErrorMessage);
         _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -289,9 +335,10 @@ public sealed class DictationPipelineTests
             store, _settings.Object, foregroundApp.Object, TimeProvider.System, NullLogger<PromptResolver>.Instance);
         var llm = new MockLLMProvider { Delay = TimeSpan.Zero };
         var history = new SqliteHistoryRepository(paths, _settings.Object, NullLogger<SqliteHistoryRepository>.Instance);
+        var modeSelector = new PromptModeSelector(_settings.Object, NullLogger<PromptModeSelector>.Instance);
 
         var pipeline = new DictationPipeline(
-            speech, resolver, llm, history, [_output.Object], _gate.Object,
+            speech, modeSelector, resolver, llm, history, [_output.Object], _gate.Object,
             _settings.Object, TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
         var result = await pipeline.RunAsync(CreateRequest(), CancellationToken.None);

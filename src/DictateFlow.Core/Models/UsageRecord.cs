@@ -1,8 +1,9 @@
 namespace DictateFlow.Core.Models;
 
 /// <summary>
-/// One billable provider call, reported to <c>IUsageSink</c> after each successful request.
-/// M6 persists these to SQLite and adds cost math; until then a no-op sink swallows them.
+/// One billable provider call, reported to <c>IUsageSink</c> after each successful request
+/// and persisted to the <c>UsageRecords</c> table with a cost estimated from the pricing
+/// rates in effect at insert time.
 /// </summary>
 /// <param name="TimestampUtc">When the call completed, in UTC.</param>
 /// <param name="Category">What was billed — see <see cref="UsageCategories"/>.</param>
@@ -16,12 +17,12 @@ public sealed record UsageRecord(
     int? PromptTokens,
     int? CompletionTokens);
 
-/// <summary>Well-known <see cref="UsageRecord.Category"/> values.</summary>
+/// <summary>Well-known <see cref="UsageRecord.Category"/> values (also stored in the <c>Category</c> column).</summary>
 public static class UsageCategories
 {
     /// <summary>Speech-to-text calls, billed by audio duration.</summary>
-    public const string Transcription = "Transcription";
+    public const string Speech = "Speech";
 
     /// <summary>LLM enhancement calls, billed by tokens.</summary>
-    public const string LlmEnhancement = "LlmEnhancement";
+    public const string Llm = "Llm";
 }

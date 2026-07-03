@@ -179,7 +179,7 @@ public sealed class AzureFoundryLLMProviderTests
         await provider.ProcessAsync(Context(), CancellationToken.None);
 
         var record = Assert.Single(_usageSink.Records);
-        Assert.Equal(UsageCategories.LlmEnhancement, record.Category);
+        Assert.Equal(UsageCategories.Llm, record.Category);
         Assert.Equal(42, record.PromptTokens);
         Assert.Equal(17, record.CompletionTokens);
         Assert.Null(record.DurationSeconds);

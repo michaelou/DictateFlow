@@ -262,7 +262,7 @@ public sealed class DictationControllerTests
         Assert.Equal(1234, request.TargetWindowHandle);
         _overlay.Verify(o => o.ShowProcessing(), Times.Once);
         _overlay.Verify(o => o.ShowSuccess(), Times.Once);
-        _overlay.Verify(o => o.ShowError(), Times.Never);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -273,15 +273,40 @@ public sealed class DictationControllerTests
             .ReturnsAsync(new PipelineResult(false, null, null, "bad key — check settings"));
         var controller = CreateController();
         string? failure = null;
-        controller.DictationFailed += (_, message) => failure = message;
+        controller.DictationFailed += (_, e) => failure = e.Message;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync(); // must not throw — the app keeps running
 
         Assert.Equal("bad key — check settings", failure);
         Assert.False(controller.IsRecording);
-        _overlay.Verify(o => o.ShowError(), Times.Once);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Once);
         _overlay.Verify(o => o.ShowSuccess(), Times.Never);
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_ConfigurationFailure_FlagAndShortOverlayMessagePropagate()
+    {
+        SetupCaptureWithAudio();
+        var longMessage = "The speech service rejected the request (401). Check your API key in Settings → Speech. "
+            + "This sentence pushes the message well past the overlay budget.";
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipelineResult(false, null, null, longMessage, IsConfigurationError: true));
+        string? overlayMessage = null;
+        _overlay.Setup(o => o.ShowError(It.IsAny<string?>())).Callback<string?>(m => overlayMessage = m);
+        var controller = CreateController();
+        DictationFailedEventArgs? failure = null;
+        controller.DictationFailed += (_, e) => failure = e;
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.NotNull(failure);
+        Assert.True(failure!.IsConfigurationError);
+        Assert.Equal(longMessage, failure.Message); // the notification gets the full message
+        Assert.NotNull(overlayMessage);
+        Assert.True(overlayMessage!.Length <= 91); // the overlay gets a shortened single line
+        Assert.EndsWith("…", overlayMessage);
     }
 
     [Fact]
@@ -293,7 +318,7 @@ public sealed class DictationControllerTests
             .ReturnsAsync(new PipelineResult(true, null, "raw transcript", null));
         var controller = CreateController();
         string? failure = null;
-        controller.DictationFailed += (_, message) => failure = message;
+        controller.DictationFailed += (_, e) => failure = e.Message;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync();
@@ -301,7 +326,7 @@ public sealed class DictationControllerTests
         Assert.Null(failure);
         _overlay.Verify(o => o.Hide(), Times.Once);
         _overlay.Verify(o => o.ShowSuccess(), Times.Never);
-        _overlay.Verify(o => o.ShowError(), Times.Never);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -312,14 +337,16 @@ public sealed class DictationControllerTests
             .ThrowsAsync(new InvalidOperationException("boom"));
         var controller = CreateController();
         string? failure = null;
-        controller.DictationFailed += (_, message) => failure = message;
+        controller.DictationFailed += (_, e) => failure = e.Message;
 
         await controller.StartRecordingAsync();
         await controller.StopRecordingAsync(); // must not throw — the app keeps running
 
         Assert.NotNull(failure);
-        Assert.Contains("boom", failure);
-        _overlay.Verify(o => o.ShowError(), Times.Once);
+        // Raw exception text never reaches the user; a generic message stands in.
+        Assert.Contains("unexpectedly", failure);
+        Assert.DoesNotContain("boom", failure);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

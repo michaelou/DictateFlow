@@ -17,11 +17,11 @@ public interface IDictationController
     Stream? LastCapture { get; }
 
     /// <summary>
-    /// Raised when the dictation pipeline failed, with a user-presentable message.
-    /// Successful dictations end in the target application (and the Success overlay) —
-    /// there is no completion event to consume.
+    /// Raised when the dictation pipeline failed, with a user-presentable message and a
+    /// configuration-error flag. Successful dictations end in the target application (and
+    /// the Success overlay) — there is no completion event to consume.
     /// </summary>
-    event EventHandler<string>? DictationFailed;
+    event EventHandler<DictationFailedEventArgs>? DictationFailed;
 
     /// <summary>Starts a recording session. A no-op when one is already running.</summary>
     Task StartRecordingAsync();

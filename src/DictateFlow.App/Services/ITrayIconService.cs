@@ -11,7 +11,12 @@ public interface ITrayIconService : IDisposable
     /// <summary>Shows a non-blocking error balloon/toast from the tray icon.</summary>
     /// <param name="title">The notification title.</param>
     /// <param name="message">The notification body.</param>
-    void ShowErrorNotification(string title, string message);
+    /// <param name="onClick">
+    /// Optional action invoked when the user clicks the notification (e.g. opening the
+    /// Settings window for configuration errors). Only the most recent notification's
+    /// action is armed at any time.
+    /// </param>
+    void ShowErrorNotification(string title, string message, Action? onClick = null);
 
     /// <summary>Shows a non-blocking warning balloon/toast from the tray icon.</summary>
     /// <param name="title">The notification title.</param>

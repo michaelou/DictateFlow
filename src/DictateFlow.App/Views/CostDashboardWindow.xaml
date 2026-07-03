@@ -1,0 +1,87 @@
+<Window x:Class="DictateFlow.App.Views.CostDashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DictateFlow Cost Dashboard"
+        Width="720"
+        Height="380"
+        MinWidth="560"
+        MinHeight="300"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right"
+                    Width="88"
+                    Content="Refresh"
+                    Command="{Binding RefreshCommand}" />
+            <TextBlock VerticalAlignment="Center"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Text="Estimated usage costs" />
+        </DockPanel>
+
+        <!-- Today / This month / Lifetime cards -->
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Periods}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="3" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <GroupBox Margin="0,0,8,0" Header="{Binding Title}">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,0,2" FontWeight="SemiBold" Text="Speech" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Requests" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechRequests}" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Minutes" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechMinutes}" />
+                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechCost}" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,0,2" FontWeight="SemiBold" Text="LLM" />
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Requests" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmRequests}" />
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Prompt / completion tokens" />
+                            <TextBlock Grid.Row="6" Grid.Column="1" HorizontalAlignment="Right">
+                                <Run Text="{Binding PromptTokens, Mode=OneWay}" /><Run Text=" / " /><Run Text="{Binding CompletionTokens, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
+                            <TextBlock Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmCost}" />
+
+                            <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,8,0,0" FontWeight="SemiBold" Text="Total" />
+                            <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,8,0,0" HorizontalAlignment="Right" FontWeight="SemiBold" Text="{Binding TotalCost}" />
+                        </Grid>
+                    </GroupBox>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Grid.Row="2"
+                   Margin="0,8,0,0"
+                   Foreground="{x:Static SystemColors.GrayTextBrush}"
+                   TextWrapping="Wrap"
+                   Text="{Binding StatusMessage}" />
+    </Grid>
+</Window>

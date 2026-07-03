@@ -258,7 +258,7 @@ public sealed class AzureFoundryTranscriptionProvider : ITranscriptionProvider
 
         _usageSink.Record(new UsageRecord(
             _timeProvider.GetUtcNow().UtcDateTime,
-            UsageCategories.Transcription,
+            UsageCategories.Speech,
             duration,
             PromptTokens: null,
             CompletionTokens: null));
