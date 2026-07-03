@@ -16,6 +16,9 @@
         <DataTemplate x:Key="NameItemTemplate">
             <TextBlock Text="{Binding Name}" />
         </DataTemplate>
+        <DataTemplate x:Key="DisplayNameItemTemplate">
+            <TextBlock Text="{Binding DisplayName}" />
+        </DataTemplate>
     </Window.Resources>
     <Grid Margin="8">
         <Grid.RowDefinitions>
@@ -84,7 +87,7 @@
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Microphone" />
                     <ComboBox Width="280"
                               HorizontalAlignment="Left"
-                              ItemTemplate="{StaticResource NameItemTemplate}"
+                              ItemTemplate="{StaticResource DisplayNameItemTemplate}"
                               ItemsSource="{Binding Microphones}"
                               SelectedItem="{Binding SelectedMicrophone}" />
 
