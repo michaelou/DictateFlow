@@ -2,10 +2,10 @@ using System.Net;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 namespace DictateFlow.Tests;
 
@@ -17,28 +17,22 @@ public sealed class AzureFoundryTranscriptionProviderTests
 {
     private readonly RecordingUsageSink _usageSink = new();
 
-    private readonly AppSettings _appSettings = new()
+    private readonly AzureFoundryTranscriptionConfig _config = new()
     {
-        Speech =
-        {
-            Endpoint = "https://myresource.cognitiveservices.azure.com",
-            ApiKey = "test-key",
-            DeploymentName = "mai-transcribe",
-            Language = "en-US",
-            TimeoutSeconds = 30,
-        },
+        Endpoint = "https://myresource.cognitiveservices.azure.com",
+        ApiKey = "test-key",
+        DeploymentName = "mai-transcribe",
+        Language = "en-US",
+        TimeoutSeconds = 30,
     };
 
-    private ISettingsService CreateSettings()
-    {
-        var mock = new Mock<ISettingsService>();
-        mock.SetupGet(s => s.Current).Returns(_appSettings);
-        return mock.Object;
-    }
+    private IProviderConfigReader CreateConfigReader()
+        => new TestProviderConfigReader()
+            .Set(ProviderKind.Transcription, AzureFoundryProviders.RegistrationName, _config);
 
     /// <summary>Creates a provider talking directly to the fake handler (no resilience pipeline).</summary>
     private AzureFoundryTranscriptionProvider CreateProvider(FakeHttpMessageHandler handler)
-        => new(new HttpClient(handler), CreateSettings(), _usageSink, TimeProvider.System,
+        => new(new HttpClient(handler), CreateConfigReader(), _usageSink, TimeProvider.System,
             NullLogger<AzureFoundryTranscriptionProvider>.Instance);
 
     /// <summary>
@@ -49,7 +43,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(CreateSettings());
+        services.AddSingleton(CreateConfigReader());
         services.AddSingleton<IUsageSink>(_usageSink);
         services.AddSingleton(TimeProvider.System);
         services.AddAzureFoundryTranscription(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1))
@@ -89,7 +83,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_EmptyLanguage_OmitsLocales()
     {
-        _appSettings.Speech.Language = "";
+        _config.Language = "";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -101,7 +95,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_EmptyDeployment_OmitsEnhancedMode()
     {
-        _appSettings.Speech.DeploymentName = "";
+        _config.DeploymentName = "";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -113,7 +107,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_EndpointWithFullPath_UsedAsIsWithApiVersionAppended()
     {
-        _appSettings.Speech.Endpoint = "https://myresource.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe";
+        _config.Endpoint = "https://myresource.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -127,7 +121,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_EndpointWithExistingApiVersion_NotDuplicated()
     {
-        _appSettings.Speech.Endpoint = "https://host/speechtotext/transcriptions:transcribe?api-version=preview";
+        _config.Endpoint = "https://host/speechtotext/transcriptions:transcribe?api-version=preview";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -226,7 +220,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_Timeout_HonorsConfiguredTimeoutSeconds()
     {
-        _appSettings.Speech.TimeoutSeconds = 1;
+        _config.TimeoutSeconds = 1;
         var handler = new FakeHttpMessageHandler(async (_, cancellationToken) =>
         {
             await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
@@ -266,13 +260,13 @@ public sealed class AzureFoundryTranscriptionProviderTests
             () => provider.TranscribeAsync(OneSecondWav(), CancellationToken.None));
 
         Assert.True(ex.IsConfigurationError);
-        Assert.Contains(_appSettings.Speech.Endpoint, ex.Message);
+        Assert.Contains(_config.Endpoint, ex.Message);
     }
 
     [Fact]
     public async Task TranscribeAsync_InvalidEndpoint_ConfigurationError()
     {
-        _appSettings.Speech.Endpoint = "not a url";
+        _config.Endpoint = "not a url";
         var provider = CreateProvider(new FakeHttpMessageHandler(HttpStatusCode.OK));
 
         var ex = await Assert.ThrowsAsync<ProviderException>(
@@ -284,7 +278,7 @@ public sealed class AzureFoundryTranscriptionProviderTests
     [Fact]
     public async Task TranscribeAsync_MissingApiKey_ConfigurationError()
     {
-        _appSettings.Speech.ApiKey = "";
+        _config.ApiKey = "";
         var provider = CreateProvider(new FakeHttpMessageHandler(HttpStatusCode.OK));
 
         var ex = await Assert.ThrowsAsync<ProviderException>(

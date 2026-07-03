@@ -120,32 +120,78 @@
                                Foreground="{x:Static SystemColors.GrayTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Text="Azure AI Foundry transcription. Leave the endpoint empty to use the built-in mock provider." />
+                               Text="The provider that turns recordings into text. The Mock provider returns canned text, so the whole flow works without any cloud service." />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
-                    <TextBox Width="340"
-                             HorizontalAlignment="Left"
-                             Text="{Binding SpeechEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Provider" />
+                    <ComboBox Width="200"
+                              HorizontalAlignment="Left"
+                              ItemsSource="{Binding SpeechProviders}"
+                              SelectedItem="{Binding SelectedSpeechProvider}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
-                    <PasswordBox Width="340"
+                    <!-- AzureFoundry config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="AzureFoundry">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
+                        <TextBox Width="340"
                                  HorizontalAlignment="Left"
-                                 controls:PasswordBoxHelper.BoundPassword="{Binding SpeechApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                 Text="{Binding SpeechEndpoint, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
-                    <TextBox Width="200"
-                             HorizontalAlignment="Left"
-                             Text="{Binding SpeechDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding SpeechApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language" />
-                    <TextBox Width="120"
-                             HorizontalAlignment="Left"
-                             Text="{Binding SpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding SpeechDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
-                    <TextBox Width="80"
-                             HorizontalAlignment="Left"
-                             Text="{Binding SpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language" />
+                        <TextBox Width="120"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding SpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding SpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <!-- Mock config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="Mock">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Delay (milliseconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding MockSpeechDelayMs, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Canned transcript" />
+                        <TextBox Height="60"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Text="{Binding MockSpeechText, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
 
                     <Button Width="140"
                             Margin="0,16,0,0"
@@ -182,50 +228,89 @@
                                Foreground="{x:Static SystemColors.GrayTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Text="Azure AI Foundry chat completions. Leave the endpoint empty to use the built-in mock provider." />
+                               Text="The provider that turns raw transcripts into polished text. The Mock provider prefixes the transcript, so the whole flow works without any cloud service." />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
-                    <TextBox Width="340"
-                             HorizontalAlignment="Left"
-                             Text="{Binding LlmEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Provider" />
+                    <ComboBox Width="200"
+                              HorizontalAlignment="Left"
+                              ItemsSource="{Binding LlmProviders}"
+                              SelectedItem="{Binding SelectedLlmProvider}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
-                    <PasswordBox Width="340"
+                    <!-- AzureFoundry config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedLlmProvider}" Value="AzureFoundry">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Endpoint" />
+                        <TextBox Width="340"
                                  HorizontalAlignment="Left"
-                                 controls:PasswordBoxHelper.BoundPassword="{Binding LlmApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                 Text="{Binding LlmEndpoint, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
-                    <TextBox Width="200"
-                             HorizontalAlignment="Left"
-                             Text="{Binding LlmDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding LlmApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–2)" />
-                    <StackPanel Orientation="Horizontal">
-                        <Slider Width="220"
-                                VerticalAlignment="Center"
-                                Minimum="0"
-                                Maximum="2"
-                                TickFrequency="0.1"
-                                IsSnapToTickEnabled="True"
-                                Value="{Binding LlmTemperature}" />
-                        <TextBox Width="60"
-                                 Margin="8,0,0,0"
-                                 Text="{Binding LlmTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Deployment name" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding LlmDeploymentName, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–2)" />
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="220"
+                                    VerticalAlignment="Center"
+                                    Minimum="0"
+                                    Maximum="2"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding LlmTemperature}" />
+                            <TextBox Width="60"
+                                     Margin="8,0,0,0"
+                                     Text="{Binding LlmTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   Text="Default for modes without their own temperature." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding LlmMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding LlmTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
-                               FontSize="11"
-                               Margin="0,2,0,0"
-                               Text="Default for modes without their own temperature." />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
-                    <TextBox Width="80"
-                             HorizontalAlignment="Left"
-                             Text="{Binding LlmMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+                    <!-- Mock config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedLlmProvider}" Value="Mock">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
-                    <TextBox Width="80"
-                             HorizontalAlignment="Left"
-                             Text="{Binding LlmTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Delay (milliseconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding MockLlmDelayMs, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
 
                     <Button Width="140"
                             Margin="0,16,0,0"
@@ -372,13 +457,15 @@
                                Text="How dictated text is delivered into the application that had focus. Changes apply from the next dictation." />
 
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Provider" />
-                    <RadioButton Content="Clipboard paste (fast; briefly replaces the clipboard, then restores it)"
-                                 GroupName="OutputProvider"
-                                 IsChecked="{Binding IsClipboardPasteOutput}" />
-                    <RadioButton Margin="0,4,0,0"
-                                 Content="Simulated keyboard (slower; types the text — works where paste is blocked)"
-                                 GroupName="OutputProvider"
-                                 IsChecked="{Binding IsSimulatedKeyboardOutput}" />
+                    <ComboBox Width="220"
+                              HorizontalAlignment="Left"
+                              ItemsSource="{Binding OutputProviders}"
+                              SelectedItem="{Binding SelectedOutputProvider}" />
+                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Text="ClipboardPaste is fast (briefly replaces the clipboard, then restores it); SimulatedKeyboard types the text and works where paste is blocked." />
 
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Mode" />
                     <RadioButton Content="Automatic (deliver immediately after enhancement)"

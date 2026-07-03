@@ -1,6 +1,6 @@
 using DictateFlow.App;
 using DictateFlow.App.Services;
-using DictateFlow.Core.Models;
+using DictateFlow.App.Services.Output;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.History;
@@ -8,15 +8,17 @@ using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DictateFlow.Tests;
 
 /// <summary>
-/// Smoke tests proving the DI container can build the M2/M3/M4/M5 object graph
+/// Smoke tests proving the DI container can build the full object graph
 /// (no UI resources are touched at construction time).
 /// </summary>
 public sealed class ServiceRegistrationTests : IDisposable
@@ -25,13 +27,16 @@ public sealed class ServiceRegistrationTests : IDisposable
 
     public void Dispose() => _paths.Dispose();
 
-    [Fact]
-    public void AddDictateFlow_ResolvesAudioServices()
-    {
-        using var provider = new ServiceCollection()
+    private ServiceProvider BuildProvider()
+        => new ServiceCollection()
             .AddLogging()
             .AddDictateFlow(_paths)
             .BuildServiceProvider();
+
+    [Fact]
+    public void AddDictateFlow_ResolvesAudioServices()
+    {
+        using var provider = BuildProvider();
 
         Assert.NotNull(provider.GetRequiredService<IDictationController>());
         Assert.NotNull(provider.GetRequiredService<IAudioRecorder>());
@@ -44,12 +49,9 @@ public sealed class ServiceRegistrationTests : IDisposable
     [Fact]
     public void AddDictateFlow_ResolvesTranscriptionServices()
     {
-        using var provider = new ServiceCollection()
-            .AddLogging()
-            .AddDictateFlow(_paths)
-            .BuildServiceProvider();
+        using var provider = BuildProvider();
 
-        Assert.IsType<TranscriptionProviderSelector>(provider.GetRequiredService<ITranscriptionProvider>());
+        Assert.IsType<ActiveTranscriptionProvider>(provider.GetRequiredService<ITranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<MockTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureFoundryTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<IDictationFailureNotifier>());
@@ -58,30 +60,52 @@ public sealed class ServiceRegistrationTests : IDisposable
     [Fact]
     public void AddDictateFlow_ResolvesOutputPipelineServices()
     {
-        using var provider = new ServiceCollection()
-            .AddLogging()
-            .AddDictateFlow(_paths)
-            .BuildServiceProvider();
+        using var provider = BuildProvider();
 
         Assert.IsType<DictationPipeline>(provider.GetRequiredService<IDictationPipeline>());
         Assert.IsType<SqliteHistoryRepository>(provider.GetRequiredService<IHistoryRepository>());
         Assert.NotNull(provider.GetRequiredService<IOutputGate>());
 
-        var outputProviders = provider.GetServices<IOutputProvider>().ToList();
-        Assert.Equal(2, outputProviders.Count);
-        Assert.Contains(outputProviders, p => p.Name == OutputProviderNames.ClipboardPaste);
-        Assert.Contains(outputProviders, p => p.Name == OutputProviderNames.SimulatedKeyboard);
+        // The single IOutputProvider is the registry-backed default; the concrete providers
+        // live behind keyed registrations enumerated through the registry.
+        Assert.IsType<ActiveOutputProvider>(provider.GetRequiredService<IOutputProvider>());
+    }
+
+    [Fact]
+    public void AddDictateFlow_RegistersAllProvidersInTheRegistry()
+    {
+        using var provider = BuildProvider();
+        var registry = provider.GetRequiredService<IProviderRegistry>();
+
+        Assert.Equal(
+            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName],
+            registry.GetNames(ProviderKind.Transcription));
+        Assert.Equal(
+            [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName],
+            registry.GetNames(ProviderKind.Llm));
+        Assert.Equal(
+            [OutputProviderNames.ClipboardPaste, OutputProviderNames.SimulatedKeyboard, NullOutputProvider.RegistrationName],
+            registry.GetNames(ProviderKind.Output));
+    }
+
+    [Fact]
+    public void AddDictateFlow_DefaultSettings_ResolveMockProviders()
+    {
+        using var provider = BuildProvider();
+        var registry = provider.GetRequiredService<IProviderRegistry>();
+
+        // Fresh settings activate the mocks, replacing the old "endpoint empty → mock" magic.
+        Assert.IsType<MockTranscriptionProvider>(registry.ResolveTranscription());
+        Assert.IsType<MockLLMProvider>(registry.ResolveLLM());
+        Assert.IsType<ClipboardPasteOutputProvider>(registry.ResolveOutput()); // empty name → first registered
     }
 
     [Fact]
     public void AddDictateFlow_ResolvesLlmServices()
     {
-        using var provider = new ServiceCollection()
-            .AddLogging()
-            .AddDictateFlow(_paths)
-            .BuildServiceProvider();
+        using var provider = BuildProvider();
 
-        Assert.IsType<LLMProviderSelector>(provider.GetRequiredService<ILLMProvider>());
+        Assert.IsType<ActiveLLMProvider>(provider.GetRequiredService<ILLMProvider>());
         Assert.NotNull(provider.GetRequiredService<MockLLMProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureFoundryLLMProvider>());
         Assert.NotNull(provider.GetRequiredService<IPromptModeStore>());
@@ -95,10 +119,7 @@ public sealed class ServiceRegistrationTests : IDisposable
     [Fact]
     public void AddDictateFlow_DictationControllerIsSingleton()
     {
-        using var provider = new ServiceCollection()
-            .AddLogging()
-            .AddDictateFlow(_paths)
-            .BuildServiceProvider();
+        using var provider = BuildProvider();
 
         Assert.Same(
             provider.GetRequiredService<IDictationController>(),

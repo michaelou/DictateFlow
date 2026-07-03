@@ -1,22 +1,28 @@
-using DictateFlow.Core.Models;
-using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
-using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 namespace DictateFlow.Tests;
 
 /// <summary>Tests for <see cref="MockTranscriptionProvider"/>.</summary>
 public sealed class MockTranscriptionProviderTests
 {
-    [Fact]
-    public async Task TranscribeAsync_ReturnsCannedTextAndComputedDuration()
+    private readonly MockTranscriptionConfig _config = new() { Text = "hello", DelayMs = 0 };
+    private readonly MockTranscriptionProvider _provider;
+
+    public MockTranscriptionProviderTests()
     {
-        var provider = new MockTranscriptionProvider { CannedText = "hello", Delay = TimeSpan.Zero };
+        var configReader = new TestProviderConfigReader()
+            .Set(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName, _config);
+        _provider = new MockTranscriptionProvider(configReader);
+    }
+
+    [Fact]
+    public async Task TranscribeAsync_ReturnsConfiguredTextAndComputedDuration()
+    {
         using var wav = SilentWavFactory.Create(TimeSpan.FromSeconds(2));
 
-        var result = await provider.TranscribeAsync(wav, CancellationToken.None);
+        var result = await _provider.TranscribeAsync(wav, CancellationToken.None);
 
         Assert.Equal("hello", result.Text);
         Assert.NotNull(result.AudioDurationSeconds);
@@ -24,72 +30,24 @@ public sealed class MockTranscriptionProviderTests
     }
 
     [Fact]
+    public async Task TranscribeAsync_ReadsConfigPerCall_SoEditsApplyLive()
+    {
+        await _provider.TranscribeAsync(new MemoryStream(), CancellationToken.None);
+
+        _config.Text = "changed";
+        var result = await _provider.TranscribeAsync(new MemoryStream(), CancellationToken.None);
+
+        Assert.Equal("changed", result.Text);
+    }
+
+    [Fact]
     public async Task TranscribeAsync_HonorsCancellationDuringDelay()
     {
-        var provider = new MockTranscriptionProvider { Delay = TimeSpan.FromSeconds(30) };
+        _config.DelayMs = 30_000;
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => provider.TranscribeAsync(new MemoryStream(), cts.Token));
-    }
-}
-
-/// <summary>Tests for <see cref="TranscriptionProviderSelector"/>.</summary>
-public sealed class TranscriptionProviderSelectorTests
-{
-    private readonly Mock<ITranscriptionProvider> _configured = new();
-    private readonly Mock<ITranscriptionProvider> _mock = new();
-    private readonly AppSettings _appSettings = new();
-    private readonly TranscriptionProviderSelector _selector;
-
-    public TranscriptionProviderSelectorTests()
-    {
-        var settings = new Mock<ISettingsService>();
-        settings.SetupGet(s => s.Current).Returns(_appSettings);
-        _configured.Setup(p => p.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TranscriptionResult("real", null, null));
-        _mock.Setup(p => p.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TranscriptionResult("mock", null, null));
-
-        _selector = new TranscriptionProviderSelector(
-            settings.Object,
-            () => _configured.Object,
-            () => _mock.Object,
-            NullLogger<TranscriptionProviderSelector>.Instance);
-    }
-
-    [Fact]
-    public async Task TranscribeAsync_EmptyEndpoint_UsesMockProvider()
-    {
-        _appSettings.Speech.Endpoint = "";
-
-        var result = await _selector.TranscribeAsync(new MemoryStream(), CancellationToken.None);
-
-        Assert.Equal("mock", result.Text);
-        _configured.Verify(p => p.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task TranscribeAsync_EndpointConfigured_UsesConfiguredProvider()
-    {
-        _appSettings.Speech.Endpoint = "https://example.com";
-
-        var result = await _selector.TranscribeAsync(new MemoryStream(), CancellationToken.None);
-
-        Assert.Equal("real", result.Text);
-        _mock.Verify(p => p.TranscribeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task TranscribeAsync_SelectionFollowsSettingsChangesWithoutRestart()
-    {
-        _appSettings.Speech.Endpoint = "";
-        await _selector.TranscribeAsync(new MemoryStream(), CancellationToken.None);
-
-        _appSettings.Speech.Endpoint = "https://example.com";
-        var result = await _selector.TranscribeAsync(new MemoryStream(), CancellationToken.None);
-
-        Assert.Equal("real", result.Text);
+            () => _provider.TranscribeAsync(new MemoryStream(), cts.Token));
     }
 }
 

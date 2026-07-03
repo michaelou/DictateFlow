@@ -2,10 +2,10 @@ using System.Net;
 using System.Text.Json;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 namespace DictateFlow.Tests;
 
@@ -24,33 +24,27 @@ public sealed class AzureFoundryLLMProviderTests
 
     private readonly RecordingUsageSink _usageSink = new();
 
-    private readonly AppSettings _appSettings = new()
+    private readonly AzureFoundryLlmConfig _config = new()
     {
-        Llm =
-        {
-            Endpoint = "https://myresource.services.ai.azure.com",
-            ApiKey = "test-key",
-            DeploymentName = "gpt-4o",
-            Temperature = 0.5,
-            MaxTokens = 2000,
-            TimeoutSeconds = 60,
-        },
+        Endpoint = "https://myresource.services.ai.azure.com",
+        ApiKey = "test-key",
+        DeploymentName = "gpt-4o",
+        Temperature = 0.5,
+        MaxTokens = 2000,
+        TimeoutSeconds = 60,
     };
 
     private static PromptContext Context(
         string systemPrompt = "system prompt", string transcript = "user transcript")
         => new(systemPrompt, transcript, Temperature: 0.2, MaxTokens: 1500, ModeName: "Email");
 
-    private ISettingsService CreateSettings()
-    {
-        var mock = new Mock<ISettingsService>();
-        mock.SetupGet(s => s.Current).Returns(_appSettings);
-        return mock.Object;
-    }
+    private IProviderConfigReader CreateConfigReader()
+        => new TestProviderConfigReader()
+            .Set(ProviderKind.Llm, AzureFoundryProviders.RegistrationName, _config);
 
     /// <summary>Creates a provider talking directly to the fake handler (no resilience pipeline).</summary>
     private AzureFoundryLLMProvider CreateProvider(FakeHttpMessageHandler handler)
-        => new(new HttpClient(handler), CreateSettings(), _usageSink, TimeProvider.System,
+        => new(new HttpClient(handler), CreateConfigReader(), _usageSink, TimeProvider.System,
             NullLogger<AzureFoundryLLMProvider>.Instance);
 
     /// <summary>
@@ -61,7 +55,7 @@ public sealed class AzureFoundryLLMProviderTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(CreateSettings());
+        services.AddSingleton(CreateConfigReader());
         services.AddSingleton<IUsageSink>(_usageSink);
         services.AddSingleton(TimeProvider.System);
         services.AddAzureFoundryLlm(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1))
@@ -142,8 +136,8 @@ public sealed class AzureFoundryLLMProviderTests
     [Fact]
     public async Task ProcessAsync_V1BaseEndpoint_AppendsRouteAndSendsModelInBody()
     {
-        _appSettings.Llm.Endpoint = "https://myresource.services.ai.azure.com/openai/v1";
-        _appSettings.Llm.DeploymentName = "gpt-5.4-mini";
+        _config.Endpoint = "https://myresource.services.ai.azure.com/openai/v1";
+        _config.DeploymentName = "gpt-5.4-mini";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -201,7 +195,7 @@ public sealed class AzureFoundryLLMProviderTests
     [Fact]
     public async Task ProcessAsync_EndpointWithFullPath_UsedAsIsWithApiVersionAppended()
     {
-        _appSettings.Llm.Endpoint = "https://host/openai/deployments/custom/chat/completions";
+        _config.Endpoint = "https://host/openai/deployments/custom/chat/completions";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessBody);
         var provider = CreateProvider(handler);
 
@@ -243,7 +237,7 @@ public sealed class AzureFoundryLLMProviderTests
     [Fact]
     public async Task ProcessAsync_Timeout_HonorsConfiguredTimeoutSeconds()
     {
-        _appSettings.Llm.TimeoutSeconds = 1;
+        _config.TimeoutSeconds = 1;
         var handler = new FakeHttpMessageHandler(async (_, cancellationToken) =>
         {
             await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
@@ -283,13 +277,13 @@ public sealed class AzureFoundryLLMProviderTests
             () => provider.ProcessAsync(Context(), CancellationToken.None));
 
         Assert.True(ex.IsConfigurationError);
-        Assert.Contains(_appSettings.Llm.Endpoint, ex.Message);
+        Assert.Contains(_config.Endpoint, ex.Message);
     }
 
     [Fact]
     public async Task ProcessAsync_InvalidEndpoint_ConfigurationError()
     {
-        _appSettings.Llm.Endpoint = "not a url";
+        _config.Endpoint = "not a url";
         var provider = CreateProvider(new FakeHttpMessageHandler(HttpStatusCode.OK));
 
         var ex = await Assert.ThrowsAsync<ProviderException>(
@@ -301,7 +295,7 @@ public sealed class AzureFoundryLLMProviderTests
     [Fact]
     public async Task ProcessAsync_MissingApiKey_ConfigurationError()
     {
-        _appSettings.Llm.ApiKey = "";
+        _config.ApiKey = "";
         var provider = CreateProvider(new FakeHttpMessageHandler(HttpStatusCode.OK));
 
         var ex = await Assert.ThrowsAsync<ProviderException>(
@@ -314,7 +308,7 @@ public sealed class AzureFoundryLLMProviderTests
     [Fact]
     public async Task ProcessAsync_MissingDeploymentName_ConfigurationError()
     {
-        _appSettings.Llm.DeploymentName = "";
+        _config.DeploymentName = "";
         var provider = CreateProvider(new FakeHttpMessageHandler(HttpStatusCode.OK));
 
         var ex = await Assert.ThrowsAsync<ProviderException>(

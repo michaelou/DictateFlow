@@ -15,6 +15,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Tests", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.AzureFoundry", "src\DictateFlow.Providers.AzureFoundry\DictateFlow.Providers.AzureFoundry.csproj", "{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{5D20AA90-6969-D8BD-9DCD-8634F4692FDA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Samples.NullOutput", "samples\DictateFlow.Samples.NullOutput\DictateFlow.Samples.NullOutput.csproj", "{989C2BEA-0452-415A-AA59-7D398226DB6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +77,18 @@ Global
 		{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2}.Release|x64.Build.0 = Release|Any CPU
 		{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2}.Release|x86.ActiveCfg = Release|Any CPU
 		{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2}.Release|x86.Build.0 = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|x64.Build.0 = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Debug|x86.Build.0 = Debug|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|x64.ActiveCfg = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|x64.Build.0 = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|x86.ActiveCfg = Release|Any CPU
+		{989C2BEA-0452-415A-AA59-7D398226DB6C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +98,6 @@ Global
 		{F0718BF7-F7C2-4D85-BE37-4F59F2100A87} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A9039728-7E94-4B02-B7C8-BE81DCE8D45C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3605D226-4215-4FB5-A8EC-1DECCCD0C0E2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{989C2BEA-0452-415A-AA59-7D398226DB6C} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 	EndGlobalSection
 EndGlobal

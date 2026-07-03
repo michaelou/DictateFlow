@@ -9,9 +9,11 @@ using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Providers.AzureFoundry;
+using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -42,6 +44,7 @@ public static class ServiceCollectionExtensions
             services.AddSingleton(appPaths);
         }
 
+        services.AddSingleton<ISettingsMigration, LegacySettingsMigration>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
 
@@ -56,39 +59,46 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRecordingOverlay, RecordingOverlayService>();
         services.AddSingleton<IDictationController, DictationController>();
 
-        // Transcription: the Azure provider behind the standard resilience pipeline, the mock
-        // fallback, and a selector that picks per call based on whether an endpoint is set.
-        // This is the only place (besides the Providers project itself) that names Azure types.
-        services.AddAzureFoundryTranscription();
-        services.AddSingleton<MockTranscriptionProvider>();
-        services.AddSingleton<ITranscriptionProvider>(sp => new TranscriptionProviderSelector(
-            sp.GetRequiredService<ISettingsService>(),
-            sp.GetRequiredService<AzureFoundryTranscriptionProvider>,
-            sp.GetRequiredService<MockTranscriptionProvider>,
-            sp.GetRequiredService<ILogger<TranscriptionProviderSelector>>()));
+        // Provider registry (M7): named registration is the one mechanism through which
+        // providers exist; ActiveProviders in settings picks per kind. This bootstrap is the
+        // single place that lists concrete providers — adding one is one registration line.
+        services.AddSingleton<IProviderRegistry, ProviderRegistry>();
+        services.AddSingleton<IProviderConfigReader, ProviderConfigReader>();
 
-        // LLM enhancement: prompt modes + resolver + per-application mode selection, the Azure
-        // chat-completions provider behind the same resilience pipeline, the mock fallback,
-        // and endpoint-empty selection. Usage lands in SQLite for the cost dashboard.
+        // The Azure typed HTTP clients (standard resilience pipeline) must be registered
+        // before their AddXProvider lines so their typed-client lifetime wins.
+        services.AddAzureFoundryTranscription();
+        services.AddAzureFoundryLlm();
+
+        // Mock providers are registered first: the first name of a kind is the fallback used
+        // when the configured active name is unknown (and the dropdown default).
+        services.AddTranscriptionProvider<MockTranscriptionProvider>(MockTranscriptionProvider.RegistrationName);
+        services.AddTranscriptionProvider<AzureFoundryTranscriptionProvider>(AzureFoundryProviders.RegistrationName);
+        services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName);
+        services.AddLLMProvider<AzureFoundryLLMProvider>(AzureFoundryProviders.RegistrationName);
+        services.AddOutputProvider<ClipboardPasteOutputProvider>(OutputProviderNames.ClipboardPaste);
+        services.AddOutputProvider<SimulatedKeyboardOutputProvider>(OutputProviderNames.SimulatedKeyboard);
+        // The sample provider proving the extensibility claim: this line is its entire integration.
+        services.AddOutputProvider<NullOutputProvider>(NullOutputProvider.RegistrationName);
+
+        // Registry-backed defaults: consumers keep injecting the plain provider interfaces
+        // and always get the provider that is active in settings at call time.
+        services.AddSingleton<ITranscriptionProvider, ActiveTranscriptionProvider>();
+        services.AddSingleton<ILLMProvider, ActiveLLMProvider>();
+        services.AddSingleton<IOutputProvider, ActiveOutputProvider>();
+
+        // LLM enhancement: prompt modes + resolver + per-application mode selection.
+        // Usage lands in SQLite for the cost dashboard.
         services.AddSingleton<IUsageSink, SqliteUsageSink>();
         services.AddSingleton<ICostService, SqliteCostService>();
         services.AddSingleton<IForegroundAppService, ForegroundAppService>();
         services.AddSingleton<IPromptModeStore, PromptModeStore>();
         services.AddSingleton<IPromptResolver, PromptResolver>();
         services.AddSingleton<IPromptModeSelector, PromptModeSelector>();
-        services.AddAzureFoundryLlm();
-        services.AddSingleton<MockLLMProvider>();
-        services.AddSingleton<ILLMProvider>(sp => new LLMProviderSelector(
-            sp.GetRequiredService<ISettingsService>(),
-            sp.GetRequiredService<AzureFoundryLLMProvider>,
-            sp.GetRequiredService<MockLLMProvider>,
-            sp.GetRequiredService<ILogger<LLMProviderSelector>>()));
 
-        // Output pipeline (M5): history write, both output providers (the pipeline picks per
-        // call from settings), the mode-aware confirmation gate, and the orchestrator itself.
+        // Output pipeline (M5): history write, the mode-aware confirmation gate, and the
+        // orchestrator itself.
         services.AddSingleton<IHistoryRepository, SqliteHistoryRepository>();
-        services.AddSingleton<IOutputProvider, ClipboardPasteOutputProvider>();
-        services.AddSingleton<IOutputProvider, SimulatedKeyboardOutputProvider>();
         services.AddSingleton<IOutputGate>(sp => new OutputGate(
             sp.GetRequiredService<ISettingsService>(),
             sp.GetRequiredService<IForegroundAppService>(),

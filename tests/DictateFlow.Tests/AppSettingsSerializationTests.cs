@@ -5,8 +5,8 @@ using DictateFlow.Core.Services;
 namespace DictateFlow.Tests;
 
 /// <summary>
-/// Verifies that serialized <see cref="AppSettings"/> defaults match the schema defined
-/// in the M1 issue, so the settings.json shape stays stable across milestones.
+/// Verifies that serialized <see cref="AppSettings"/> defaults match the M7 named-provider
+/// schema, so the settings.json shape stays stable across milestones.
 /// </summary>
 public sealed class AppSettingsSerializationTests
 {
@@ -23,24 +23,26 @@ public sealed class AppSettingsSerializationTests
         Assert.Equal(JsonValueKind.Null, recording.GetProperty("MicrophoneDeviceId").ValueKind);
         Assert.Equal(30, recording.GetProperty("SilenceTimeoutSeconds").GetInt32());
 
-        var speech = root.GetProperty("Speech");
-        Assert.Equal("", speech.GetProperty("Endpoint").GetString());
-        Assert.Equal("", speech.GetProperty("ApiKey").GetString());
-        Assert.Equal("", speech.GetProperty("DeploymentName").GetString());
-        Assert.Equal("en-US", speech.GetProperty("Language").GetString());
-        Assert.Equal(30, speech.GetProperty("TimeoutSeconds").GetInt32());
+        // Named providers replace the pre-M7 flat Speech/Llm sections.
+        Assert.False(root.TryGetProperty("Speech", out _));
+        Assert.False(root.TryGetProperty("Llm", out _));
 
-        var llm = root.GetProperty("Llm");
-        Assert.Equal("", llm.GetProperty("Endpoint").GetString());
-        Assert.Equal("", llm.GetProperty("ApiKey").GetString());
-        Assert.Equal("", llm.GetProperty("DeploymentName").GetString());
-        Assert.Equal(0.2, llm.GetProperty("Temperature").GetDouble());
-        Assert.Equal(2000, llm.GetProperty("MaxTokens").GetInt32());
-        Assert.Equal(60, llm.GetProperty("TimeoutSeconds").GetInt32());
+        var activeProviders = root.GetProperty("ActiveProviders");
+        Assert.Equal("Mock", activeProviders.GetProperty("Transcription").GetString());
+        Assert.Equal("Mock", activeProviders.GetProperty("Llm").GetString());
+        Assert.Equal("", activeProviders.GetProperty("Output").GetString()); // empty → first registered
+
+        var providers = root.GetProperty("Providers");
+        var mockTranscription = providers.GetProperty("Transcription").GetProperty("Mock");
+        Assert.Equal(300, mockTranscription.GetProperty("DelayMs").GetInt32());
+        Assert.StartsWith("This is mock transcript text", mockTranscription.GetProperty("Text").GetString());
+        var mockLlm = providers.GetProperty("Llm").GetProperty("Mock");
+        Assert.Equal(300, mockLlm.GetProperty("DelayMs").GetInt32());
+        Assert.Equal(0, providers.GetProperty("Output").EnumerateObject().Count());
 
         var output = root.GetProperty("Output");
-        Assert.Equal("ClipboardPaste", output.GetProperty("Provider").GetString());
         Assert.Equal("Automatic", output.GetProperty("Mode").GetString());
+        Assert.False(output.TryGetProperty("Provider", out _)); // moved to ActiveProviders.Output
 
         var history = root.GetProperty("History");
         Assert.True(history.GetProperty("Enabled").GetBoolean());
@@ -57,6 +59,25 @@ public sealed class AppSettingsSerializationTests
         Assert.Equal("Raw", root.GetProperty("ActivePromptMode").GetString());
         Assert.Equal(0, root.GetProperty("TechnicalDictionary").GetArrayLength());
         Assert.Equal(0, root.GetProperty("ApplicationRules").GetArrayLength());
+    }
+
+    [Fact]
+    public void ProviderSections_RoundTripThroughJson()
+    {
+        var settings = new AppSettings();
+        settings.ActiveProviders.Transcription = "AzureFoundry";
+        settings.Providers.Transcription["AzureFoundry"] = JsonSerializer.SerializeToElement(
+            new { Endpoint = "https://example.com", ApiKey = "key" });
+
+        var json = JsonSerializer.Serialize(settings, SettingsService.SerializerOptions);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, SettingsService.SerializerOptions);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("AzureFoundry", loaded.ActiveProviders.Transcription);
+        var section = loaded.Providers.Transcription["AzureFoundry"];
+        Assert.Equal("https://example.com", section.GetProperty("Endpoint").GetString());
+        Assert.Equal("key", section.GetProperty("ApiKey").GetString());
+        Assert.True(loaded.Providers.Transcription.ContainsKey("Mock")); // default section survives
     }
 
     [Fact]
@@ -91,12 +112,12 @@ public sealed class AppSettingsSerializationTests
     [Fact]
     public void Deserialization_IsCaseInsensitive()
     {
-        const string json = """{ "LLM": { "temperature": 0.9 }, "OUTPUT": { "PROVIDER": "TypeText" } }""";
+        const string json = """{ "ACTIVEPROVIDERS": { "llm": "AzureFoundry" }, "OUTPUT": { "MODE": "Preview" } }""";
 
         var settings = JsonSerializer.Deserialize<AppSettings>(json, SettingsService.SerializerOptions);
 
         Assert.NotNull(settings);
-        Assert.Equal(0.9, settings.Llm.Temperature);
-        Assert.Equal("TypeText", settings.Output.Provider);
+        Assert.Equal("AzureFoundry", settings.ActiveProviders.Llm);
+        Assert.Equal("Preview", settings.Output.Mode);
     }
 }

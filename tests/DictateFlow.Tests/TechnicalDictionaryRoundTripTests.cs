@@ -21,13 +21,13 @@ public sealed class TechnicalDictionaryRoundTripTests : IDisposable
     public async Task DictionaryTerms_SavedReloadedAndResolvedIntoThePrompt()
     {
         // Save terms through the real settings service…
-        var writer = new SettingsService(_paths, NullLogger<SettingsService>.Instance);
+        var writer = new SettingsService(_paths, [], NullLogger<SettingsService>.Instance);
         await writer.LoadAsync();
         writer.Current.TechnicalDictionary = ["Belugga", "DictateFlow", "xUnit"];
         await writer.SaveAsync();
 
         // …reload them with a fresh instance, as an app restart would…
-        var reader = new SettingsService(_paths, NullLogger<SettingsService>.Instance);
+        var reader = new SettingsService(_paths, [], NullLogger<SettingsService>.Instance);
         await reader.LoadAsync();
         Assert.Equal(["Belugga", "DictateFlow", "xUnit"], reader.Current.TechnicalDictionary);
 
@@ -38,7 +38,8 @@ public sealed class TechnicalDictionaryRoundTripTests : IDisposable
         var foregroundApp = new Mock<IForegroundAppService>();
         foregroundApp.SetupGet(f => f.LastCaptured).Returns("");
         var resolver = new PromptResolver(
-            store.Object, reader, foregroundApp.Object, TimeProvider.System, NullLogger<PromptResolver>.Instance);
+            store.Object, reader, new TestProviderConfigReader(), foregroundApp.Object,
+            TimeProvider.System, NullLogger<PromptResolver>.Instance);
 
         var context = resolver.Resolve("hello", "Email");
 

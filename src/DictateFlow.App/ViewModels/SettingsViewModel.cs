@@ -7,7 +7,9 @@ using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Providers.AzureFoundry;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App.ViewModels;
@@ -31,33 +33,33 @@ public partial class ApplicationRuleItem : ObservableObject
 
 /// <summary>
 /// View model backing the Settings window. Exposes the section navigation skeleton plus the
-/// General/Recording page, the Speech page, the LLM page (endpoint, key, deployment,
-/// temperature, max tokens, timeout, test connection) and the Prompts page (loaded modes,
-/// active-mode selector, reload, open-folder, and the Prompt Tester that runs a pasted
-/// transcript through the real resolver and LLM provider) and the Output page (provider and
-/// delivery-mode selectors, read live by the pipeline on every run). Save persists through
+/// General/Recording page, the Speech and LLM pages (a provider dropdown fed by the provider
+/// registry that switches between the AzureFoundry and Mock config sections, with test
+/// connection), the Prompts page (loaded modes, active-mode selector, reload, open-folder,
+/// and the Prompt Tester that runs a pasted transcript through the real resolver and the
+/// selected LLM provider) and the Output page (registry-fed provider dropdown and
+/// delivery-mode selector, read live by the pipeline on every run). Save persists through
 /// <see cref="ISettingsService"/>, whose <c>SettingsChanged</c> event re-arms the hotkey
 /// without a restart.
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
-    private readonly ITranscriptionProvider _transcriptionProvider;
-    private readonly ILLMProvider _llmProvider;
+    private readonly IProviderRegistry _providerRegistry;
+    private readonly IProviderConfigReader _configReader;
     private readonly IPromptModeStore _promptModeStore;
     private readonly IPromptResolver _promptResolver;
     private readonly IAppPaths _appPaths;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isPushToTalk;
-    private bool _isClipboardPasteOutput;
     private bool _isAutomaticOutput;
 
     /// <summary>Initializes a new instance of the <see cref="SettingsViewModel"/> class.</summary>
     /// <param name="settingsService">Persists and reloads application settings.</param>
     /// <param name="microphoneEnumerator">Supplies the microphone dropdown entries.</param>
-    /// <param name="transcriptionProvider">Used by the Speech "Test connection" check.</param>
-    /// <param name="llmProvider">Used by the LLM "Test connection" check and the Prompt Tester.</param>
+    /// <param name="providerRegistry">Supplies the provider dropdown names and resolves the provider under test.</param>
+    /// <param name="configReader">Reads and writes the per-provider config sections.</param>
     /// <param name="promptModeStore">Supplies the prompt modes; reloaded when this window opens.</param>
     /// <param name="promptResolver">Resolves prompt variables for the Prompt Tester.</param>
     /// <param name="appPaths">Supplies the prompts folder for the "Open prompts folder" button.</param>
@@ -65,16 +67,16 @@ public partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         ISettingsService settingsService,
         IMicrophoneEnumerator microphoneEnumerator,
-        ITranscriptionProvider transcriptionProvider,
-        ILLMProvider llmProvider,
+        IProviderRegistry providerRegistry,
+        IProviderConfigReader configReader,
         IPromptModeStore promptModeStore,
         IPromptResolver promptResolver,
         IAppPaths appPaths,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
-        _transcriptionProvider = transcriptionProvider;
-        _llmProvider = llmProvider;
+        _providerRegistry = providerRegistry;
+        _configReader = configReader;
         _promptModeStore = promptModeStore;
         _promptResolver = promptResolver;
         _appPaths = appPaths;
@@ -90,14 +92,30 @@ public partial class SettingsViewModel : ObservableObject
         _silenceTimeoutSeconds = recording.SilenceTimeoutSeconds;
         _selectedMicrophone = options.FirstOrDefault(o => o.DeviceId == recording.MicrophoneDeviceId) ?? options[0];
 
-        var speech = _settingsService.Current.Speech;
+        SpeechProviders = _providerRegistry.GetNames(ProviderKind.Transcription);
+        LlmProviders = _providerRegistry.GetNames(ProviderKind.Llm);
+        OutputProviders = _providerRegistry.GetNames(ProviderKind.Output);
+
+        var activeProviders = _settingsService.Current.ActiveProviders;
+        _selectedSpeechProvider = FindProvider(SpeechProviders, activeProviders.Transcription, "Speech");
+        _selectedLlmProvider = FindProvider(LlmProviders, activeProviders.Llm, "LLM");
+        _selectedOutputProvider = FindProvider(OutputProviders, activeProviders.Output, "Output");
+
+        var speech = _configReader.GetConfig<AzureFoundryTranscriptionConfig>(
+            ProviderKind.Transcription, AzureFoundryProviders.RegistrationName);
         _speechEndpoint = speech.Endpoint;
         _speechApiKey = speech.ApiKey;
         _speechDeploymentName = speech.DeploymentName;
         _speechLanguage = speech.Language;
         _speechTimeoutSeconds = speech.TimeoutSeconds;
 
-        var llm = _settingsService.Current.Llm;
+        var mockSpeech = _configReader.GetConfig<MockTranscriptionConfig>(
+            ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName);
+        _mockSpeechDelayMs = mockSpeech.DelayMs;
+        _mockSpeechText = mockSpeech.Text;
+
+        var llm = _configReader.GetConfig<AzureFoundryLlmConfig>(
+            ProviderKind.Llm, AzureFoundryProviders.RegistrationName);
         _llmEndpoint = llm.Endpoint;
         _llmApiKey = llm.ApiKey;
         _llmDeploymentName = llm.DeploymentName;
@@ -105,17 +123,18 @@ public partial class SettingsViewModel : ObservableObject
         _llmMaxTokens = llm.MaxTokens;
         _llmTimeoutSeconds = llm.TimeoutSeconds;
 
+        var mockLlm = _configReader.GetConfig<MockLlmConfig>(
+            ProviderKind.Llm, MockLLMProvider.RegistrationName);
+        _mockLlmDelayMs = mockLlm.DelayMs;
+
         // Pick up files the user edited or added since the last load.
         _promptModeStore.Reload();
         _promptModes = _promptModeStore.GetAll();
         _selectedPromptMode = FindMode(_settingsService.Current.ActivePromptMode);
         _testerMode = _selectedPromptMode;
 
-        var output = _settingsService.Current.Output;
-        _isClipboardPasteOutput = !string.Equals(
-            output.Provider, OutputProviderNames.SimulatedKeyboard, StringComparison.OrdinalIgnoreCase);
         _isAutomaticOutput = !string.Equals(
-            output.Mode, OutputModes.Preview, StringComparison.OrdinalIgnoreCase);
+            _settingsService.Current.Output.Mode, OutputModes.Preview, StringComparison.OrdinalIgnoreCase);
 
         var history = _settingsService.Current.History;
         _historyEnabled = history.Enabled;
@@ -167,7 +186,22 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private int _silenceTimeoutSeconds;
 
-    /// <summary>Gets or sets the speech service endpoint URL; empty selects the mock provider.</summary>
+    /// <summary>Gets the registered transcription provider names offered by the Speech dropdown.</summary>
+    public IReadOnlyList<string> SpeechProviders { get; }
+
+    /// <summary>Gets or sets the transcription provider persisted as <c>ActiveProviders.Transcription</c> on Save.</summary>
+    [ObservableProperty]
+    private string _selectedSpeechProvider;
+
+    /// <summary>Gets or sets the mock transcription delay in milliseconds.</summary>
+    [ObservableProperty]
+    private int _mockSpeechDelayMs;
+
+    /// <summary>Gets or sets the canned text the mock transcription provider returns.</summary>
+    [ObservableProperty]
+    private string _mockSpeechText;
+
+    /// <summary>Gets or sets the speech service endpoint URL.</summary>
     [ObservableProperty]
     private string _speechEndpoint;
 
@@ -191,7 +225,18 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _speechTestResult;
 
-    /// <summary>Gets or sets the LLM service endpoint URL; empty selects the mock provider.</summary>
+    /// <summary>Gets the registered LLM provider names offered by the LLM dropdown.</summary>
+    public IReadOnlyList<string> LlmProviders { get; }
+
+    /// <summary>Gets or sets the LLM provider persisted as <c>ActiveProviders.Llm</c> on Save.</summary>
+    [ObservableProperty]
+    private string _selectedLlmProvider;
+
+    /// <summary>Gets or sets the mock LLM delay in milliseconds.</summary>
+    [ObservableProperty]
+    private int _mockLlmDelayMs;
+
+    /// <summary>Gets or sets the LLM service endpoint URL.</summary>
     [ObservableProperty]
     private string _llmEndpoint;
 
@@ -305,25 +350,12 @@ public partial class SettingsViewModel : ObservableObject
         set => IsPushToTalk = !value;
     }
 
-    /// <summary>Gets or sets a value indicating whether the clipboard-paste output provider is selected.</summary>
-    public bool IsClipboardPasteOutput
-    {
-        get => _isClipboardPasteOutput;
-        set
-        {
-            if (SetProperty(ref _isClipboardPasteOutput, value))
-            {
-                OnPropertyChanged(nameof(IsSimulatedKeyboardOutput));
-            }
-        }
-    }
+    /// <summary>Gets the registered output provider names offered by the Output dropdown.</summary>
+    public IReadOnlyList<string> OutputProviders { get; }
 
-    /// <summary>Gets or sets a value indicating whether the simulated-keyboard output provider is selected.</summary>
-    public bool IsSimulatedKeyboardOutput
-    {
-        get => !_isClipboardPasteOutput;
-        set => IsClipboardPasteOutput = !value;
-    }
+    /// <summary>Gets or sets the output provider persisted as <c>ActiveProviders.Output</c> on Save.</summary>
+    [ObservableProperty]
+    private string _selectedOutputProvider;
 
     /// <summary>Gets or sets a value indicating whether text is delivered automatically, without a preview.</summary>
     public bool IsAutomaticOutput
@@ -419,6 +451,12 @@ public partial class SettingsViewModel : ObservableObject
             return;
         }
 
+        if (MockSpeechDelayMs < 0 || MockLlmDelayMs < 0)
+        {
+            ValidationError = "Mock delays cannot be negative.";
+            return;
+        }
+
         if (HistoryMaxEntries < 0)
         {
             ValidationError = "History max entries cannot be negative (0 keeps everything).";
@@ -439,13 +477,17 @@ public partial class SettingsViewModel : ObservableObject
         recording.MicrophoneDeviceId = SelectedMicrophone.DeviceId;
         recording.SilenceTimeoutSeconds = SilenceTimeoutSeconds;
 
-        ApplySpeechSettings(_settingsService.Current.Speech);
-        ApplyLlmSettings(_settingsService.Current.Llm);
+        ApplySpeechConfigs();
+        ApplyLlmConfigs();
+
+        var activeProviders = _settingsService.Current.ActiveProviders;
+        activeProviders.Transcription = SelectedSpeechProvider;
+        activeProviders.Llm = SelectedLlmProvider;
+        activeProviders.Output = SelectedOutputProvider;
+
         _settingsService.Current.ActivePromptMode = SelectedPromptMode?.Name ?? DefaultPromptModes.RawModeName;
 
-        var output = _settingsService.Current.Output;
-        output.Provider = IsClipboardPasteOutput ? OutputProviderNames.ClipboardPaste : OutputProviderNames.SimulatedKeyboard;
-        output.Mode = IsAutomaticOutput ? OutputModes.Automatic : OutputModes.Preview;
+        _settingsService.Current.Output.Mode = IsAutomaticOutput ? OutputModes.Automatic : OutputModes.Preview;
 
         var history = _settingsService.Current.History;
         history.Enabled = HistoryEnabled;
@@ -478,9 +520,10 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Sends 0.5 s of silence through the transcription provider using the values as
-    /// entered (applied to the in-memory settings, not yet saved — Cancel reloads from disk)
-    /// and reports success or the provider's actionable error inline.
+    /// Sends 0.5 s of silence through the transcription provider selected in the dropdown,
+    /// using the values as entered (applied to the in-memory settings, not yet saved —
+    /// Cancel reloads from disk), and reports success or the provider's actionable error
+    /// inline.
     /// </summary>
     [RelayCommand]
     private async Task TestConnectionAsync(CancellationToken cancellationToken)
@@ -488,13 +531,15 @@ public partial class SettingsViewModel : ObservableObject
         SpeechTestResult = "Testing…";
         try
         {
-            ApplySpeechSettings(_settingsService.Current.Speech);
+            ApplySpeechConfigs();
+            var provider = _providerRegistry.Resolve<ITranscriptionProvider>(
+                ProviderKind.Transcription, SelectedSpeechProvider);
 
             using var silence = SilentWavFactory.Create(TimeSpan.FromSeconds(0.5));
-            await _transcriptionProvider.TranscribeAsync(silence, cancellationToken);
+            await provider.TranscribeAsync(silence, cancellationToken);
 
-            SpeechTestResult = string.IsNullOrWhiteSpace(SpeechEndpoint)
-                ? "✓ Mock provider responded — configure an endpoint to use a real speech service."
+            SpeechTestResult = IsMock(SelectedSpeechProvider)
+                ? "✓ Mock provider responded — select a real provider to use a speech service."
                 : "✓ Connection succeeded.";
             _logger.LogInformation("Speech test connection succeeded");
         }
@@ -515,9 +560,9 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Sends a trivial prompt through the LLM provider using the values as entered (applied
-    /// to the in-memory settings, not yet saved — Cancel reloads from disk) and reports the
-    /// round-trip result inline.
+    /// Sends a trivial prompt through the LLM provider selected in the dropdown, using the
+    /// values as entered (applied to the in-memory settings, not yet saved — Cancel reloads
+    /// from disk), and reports the round-trip result inline.
     /// </summary>
     [RelayCommand]
     private async Task TestLlmConnectionAsync(CancellationToken cancellationToken)
@@ -525,17 +570,18 @@ public partial class SettingsViewModel : ObservableObject
         LlmTestResult = "Testing…";
         try
         {
-            ApplyLlmSettings(_settingsService.Current.Llm);
+            ApplyLlmConfigs();
+            var provider = _providerRegistry.Resolve<ILLMProvider>(ProviderKind.Llm, SelectedLlmProvider);
 
             var context = new PromptContext(
                 "You are a connectivity check. Reply with the single word OK.",
                 "ping", Temperature: 0.0, MaxTokens: 16, ModeName: "ConnectionTest");
             var stopwatch = Stopwatch.StartNew();
-            var reply = await _llmProvider.ProcessAsync(context, cancellationToken);
+            var reply = await provider.ProcessAsync(context, cancellationToken);
             stopwatch.Stop();
 
-            LlmTestResult = string.IsNullOrWhiteSpace(LlmEndpoint)
-                ? "✓ Mock provider responded — configure an endpoint to use a real LLM service."
+            LlmTestResult = IsMock(SelectedLlmProvider)
+                ? "✓ Mock provider responded — select a real provider to use an LLM service."
                 : $"✓ Connection succeeded in {stopwatch.ElapsedMilliseconds} ms — reply: {Truncate(reply, 80)}";
             _logger.LogInformation("LLM test connection succeeded");
         }
@@ -588,9 +634,9 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Runs the pasted transcript through the real resolver and LLM provider (using the LLM
-    /// values as entered) so prompts can be debugged without any recording. The resolved
-    /// system prompt is exposed for the preview expander.
+    /// Runs the pasted transcript through the real resolver and the LLM provider selected on
+    /// the LLM page (using the values as entered) so prompts can be debugged without any
+    /// recording. The resolved system prompt is exposed for the preview expander.
     /// </summary>
     [RelayCommand(IncludeCancelCommand = true)]
     private async Task RunTesterAsync(CancellationToken cancellationToken)
@@ -603,14 +649,15 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            ApplyLlmSettings(_settingsService.Current.Llm);
+            ApplyLlmConfigs();
+            var provider = _providerRegistry.Resolve<ILLMProvider>(ProviderKind.Llm, SelectedLlmProvider);
 
             var context = _promptResolver.Resolve(TesterTranscript, TesterMode.Name);
             TesterResolvedPrompt = context.SystemPrompt;
             TesterResult = "Running…";
 
             var stopwatch = Stopwatch.StartNew();
-            var output = await _llmProvider.ProcessAsync(context, cancellationToken);
+            var output = await provider.ProcessAsync(context, cancellationToken);
             stopwatch.Stop();
 
             TesterResult = output;
@@ -688,33 +735,79 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Copies the edited Speech values into <paramref name="speech"/>.</summary>
-    private void ApplySpeechSettings(SpeechSettings speech)
+    /// <summary>
+    /// Writes the edited Speech provider configs into the in-memory settings (persisted by
+    /// Save; Cancel reloads from disk).
+    /// </summary>
+    private void ApplySpeechConfigs()
     {
-        speech.Endpoint = SpeechEndpoint.Trim();
-        speech.ApiKey = SpeechApiKey.Trim();
-        speech.DeploymentName = SpeechDeploymentName.Trim();
-        speech.Language = SpeechLanguage.Trim();
-        speech.TimeoutSeconds = SpeechTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Transcription, AzureFoundryProviders.RegistrationName,
+            new AzureFoundryTranscriptionConfig
+            {
+                Endpoint = SpeechEndpoint.Trim(),
+                ApiKey = SpeechApiKey.Trim(),
+                DeploymentName = SpeechDeploymentName.Trim(),
+                Language = SpeechLanguage.Trim(),
+                TimeoutSeconds = SpeechTimeoutSeconds,
+            });
+        _configReader.SetConfig(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName,
+            new MockTranscriptionConfig { DelayMs = MockSpeechDelayMs, Text = MockSpeechText });
     }
 
-    /// <summary>Copies the edited LLM values into <paramref name="llm"/>.</summary>
-    private void ApplyLlmSettings(LlmSettings llm)
+    /// <summary>
+    /// Writes the edited LLM provider configs into the in-memory settings (persisted by
+    /// Save; Cancel reloads from disk).
+    /// </summary>
+    private void ApplyLlmConfigs()
     {
-        llm.Endpoint = LlmEndpoint.Trim();
-        llm.ApiKey = LlmApiKey.Trim();
-        llm.DeploymentName = LlmDeploymentName.Trim();
-        llm.Temperature = LlmTemperature;
-        llm.MaxTokens = LlmMaxTokens;
-        llm.TimeoutSeconds = LlmTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Llm, AzureFoundryProviders.RegistrationName,
+            new AzureFoundryLlmConfig
+            {
+                Endpoint = LlmEndpoint.Trim(),
+                ApiKey = LlmApiKey.Trim(),
+                DeploymentName = LlmDeploymentName.Trim(),
+                Temperature = LlmTemperature,
+                MaxTokens = LlmMaxTokens,
+                TimeoutSeconds = LlmTimeoutSeconds,
+            });
+        _configReader.SetConfig(ProviderKind.Llm, MockLLMProvider.RegistrationName,
+            new MockLlmConfig { DelayMs = MockLlmDelayMs });
     }
+
+    /// <summary>
+    /// Picks the dropdown entry for a configured active provider name. An empty name means
+    /// "first registered" (the built-in default); an unknown name surfaces an inline error
+    /// and falls back to the first registered provider (Mock for speech/LLM), which Save
+    /// then persists.
+    /// </summary>
+    private string FindProvider(IReadOnlyList<string> names, string configuredName, string pageName)
+    {
+        if (string.IsNullOrWhiteSpace(configuredName))
+        {
+            return names.FirstOrDefault() ?? "";
+        }
+
+        var match = names.FirstOrDefault(n => string.Equals(n, configuredName, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            ValidationError =
+                $"Unknown {pageName} provider '{configuredName}' in settings; falling back to '{names.FirstOrDefault()}'.";
+            return names.FirstOrDefault() ?? "";
+        }
+
+        return match;
+    }
+
+    /// <summary>Whether a provider dropdown selection is the built-in mock.</summary>
+    private static bool IsMock(string providerName)
+        => string.Equals(providerName, MockTranscriptionProvider.RegistrationName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Finds a loaded mode by name (case-insensitive), defaulting to the first mode.</summary>
     private PromptMode? FindMode(string name)
         => PromptModes.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))
             ?? PromptModes.FirstOrDefault();
 
-    /// <summary>Empty endpoints are allowed (mock provider); anything else must be an absolute http(s) URL.</summary>
+    /// <summary>Empty endpoints are allowed (provider not yet configured); anything else must be an absolute http(s) URL.</summary>
     private static bool IsValidOptionalEndpoint(string endpoint)
         => string.IsNullOrWhiteSpace(endpoint)
             || (Uri.TryCreate(endpoint.Trim(), UriKind.Absolute, out var uri)

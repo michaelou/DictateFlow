@@ -3,7 +3,7 @@ namespace DictateFlow.Core.Services.Output;
 /// <summary>Delivers final text to the user's target application.</summary>
 public interface IOutputProvider
 {
-    /// <summary>Gets the provider name persisted in settings (e.g. <c>ClipboardPaste</c>, <c>SimulatedKeyboard</c>).</summary>
+    /// <summary>Gets the name this provider is registered and selected under in settings.</summary>
     string Name { get; }
 
     /// <summary>

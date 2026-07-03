@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using DictateFlow.Core.Models;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Core.Services.Prompts;
@@ -15,25 +17,29 @@ public sealed partial class PromptResolver : IPromptResolver
 {
     private readonly IPromptModeStore _modeStore;
     private readonly ISettingsService _settingsService;
+    private readonly IProviderConfigReader _configReader;
     private readonly IForegroundAppService _foregroundAppService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<PromptResolver> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="PromptResolver"/> class.</summary>
     /// <param name="modeStore">Supplies the prompt modes.</param>
-    /// <param name="settingsService">Supplies default temperature, max tokens and the technical dictionary.</param>
+    /// <param name="settingsService">Supplies the technical dictionary and the active LLM provider name.</param>
+    /// <param name="configReader">Supplies the active LLM provider's sampling defaults.</param>
     /// <param name="foregroundAppService">Supplies the application name captured at record-start.</param>
     /// <param name="timeProvider">Supplies the current date (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public PromptResolver(
         IPromptModeStore modeStore,
         ISettingsService settingsService,
+        IProviderConfigReader configReader,
         IForegroundAppService foregroundAppService,
         TimeProvider timeProvider,
         ILogger<PromptResolver> logger)
     {
         _modeStore = modeStore;
         _settingsService = settingsService;
+        _configReader = configReader;
         _foregroundAppService = foregroundAppService;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -54,11 +60,16 @@ public sealed partial class PromptResolver : IPromptResolver
         var settings = _settingsService.Current;
         var systemPrompt = TokenRegex().Replace(mode.SystemPrompt, match => ResolveToken(match, transcript, mode.Name, settings));
 
+        // Sampling defaults live in the active LLM provider's config section; sections
+        // without them (e.g. the mock's) yield the built-in defaults.
+        var samplingDefaults = _configReader.GetConfig<LlmSamplingDefaults>(
+            ProviderKind.Llm, settings.ActiveProviders.Llm);
+
         return new PromptContext(
             systemPrompt,
             transcript,
-            mode.Temperature ?? settings.Llm.Temperature,
-            settings.Llm.MaxTokens,
+            mode.Temperature ?? samplingDefaults.Temperature,
+            samplingDefaults.MaxTokens,
             mode.Name);
     }
 
