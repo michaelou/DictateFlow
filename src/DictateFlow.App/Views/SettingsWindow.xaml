@@ -2,9 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:DictateFlow.App.Controls"
-        Title="DictateFlow Settings"
         Background="{DynamicResource WindowBackgroundBrush}"
-        Title="DictateFlow — Settings"
+        Title="DictateFlow Settings"
         Width="640"
         Height="440"
         MinWidth="480"
@@ -92,11 +91,15 @@
                               ItemsSource="{Binding LogLevels}"
                               SelectedItem="{Binding SelectedLogLevel}" />
                     <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Debug writes per-dictation latency details to the log files. Takes effect after a restart." />
+
                     <TextBlock Margin="0,16,0,4" FontSize="15" FontWeight="SemiBold" Text="Startup" />
                     <CheckBox Margin="0,4,0,0"
                               Content="_Launch DictateFlow when Windows starts"
                               IsChecked="{Binding LaunchAtStartup}" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Adds a per-user entry under the Windows Run registry key. Applied when you Save." />
@@ -695,7 +698,7 @@
                                FontWeight="SemiBold"
                                Text="Backup" />
                     <TextBlock Margin="0,4,0,0"
-                               Foreground="{x:Static SystemColors.GrayTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
                                Text="Move your configuration between machines. API keys are excluded from settings exports unless you opt in; imports are validated and confirmed before they apply." />
@@ -710,7 +713,7 @@
                                 Content="Import settings…"
                                 Command="{Binding ImportSettingsCommand}" />
                     </StackPanel>
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                TextWrapping="Wrap"
@@ -726,7 +729,7 @@
                                 Content="Import prompts…"
                                 Command="{Binding ImportPromptsCommand}" />
                     </StackPanel>
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                TextWrapping="Wrap"
@@ -815,7 +818,7 @@
                               HorizontalAlignment="Left"
                               ItemsSource="{Binding LogLevels}"
                               SelectedItem="{Binding SelectedLogLevel}" />
-                    <TextBlock Foreground="{x:Static SystemColors.GrayTextBrush}"
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Debug writes per-dictation latency details. Saved with Save; takes effect after a restart." />
