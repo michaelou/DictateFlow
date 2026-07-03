@@ -42,9 +42,9 @@ public sealed class PromptResolverTests
             new FixedTimeProvider(), NullLogger<PromptResolver>.Instance);
     }
 
-    private void SetupMode(string name, string systemPrompt, double? temperature = null)
+    private void SetupMode(string name, string systemPrompt, double? temperature = null, bool llmEnabled = true)
         => _store.Setup(s => s.GetByName(name))
-            .Returns(new PromptMode(name, "", systemPrompt, temperature));
+            .Returns(new PromptMode(name, "", systemPrompt, temperature, llmEnabled));
 
     [Fact]
     public void Resolve_SubstitutesAllVariables()
@@ -143,6 +143,29 @@ public sealed class PromptResolverTests
 
         Assert.Equal(0.7, context.Temperature);
         Assert.Equal(1234, context.MaxTokens);
+    }
+
+    [Fact]
+    public void Resolve_LlmDisabledMode_SkipsResolutionAndFlagsContext()
+    {
+        SetupMode("Verbatim", "should never be resolved {{Transcript}}", llmEnabled: false);
+        var resolver = CreateResolver();
+
+        var context = resolver.Resolve("hello", "Verbatim");
+
+        Assert.False(context.LlmEnabled);
+        Assert.Equal("", context.SystemPrompt);
+        Assert.Equal("hello", context.Transcript);
+        Assert.Equal("Verbatim", context.ModeName);
+    }
+
+    [Fact]
+    public void Resolve_LlmEnabledMode_FlagsContextEnabled()
+    {
+        SetupMode("Email", "p");
+        var resolver = CreateResolver();
+
+        Assert.True(resolver.Resolve("x", "Email").LlmEnabled);
     }
 
     [Fact]

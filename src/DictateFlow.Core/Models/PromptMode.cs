@@ -8,8 +8,10 @@ namespace DictateFlow.Core.Models;
 /// <param name="Description">Short human-readable description shown in the Settings UI.</param>
 /// <param name="SystemPrompt">System prompt template; may contain <c>{{Variable}}</c> tokens.</param>
 /// <param name="Temperature">Per-mode temperature override; <see langword="null"/> uses <c>Llm.Temperature</c> from settings.</param>
+/// <param name="LlmEnabled">Whether transcripts are sent through the LLM; when <see langword="false"/> the raw transcript is delivered as-is.</param>
 public sealed record PromptMode(
     string Name,
     string Description,
     string SystemPrompt,
-    double? Temperature);
+    double? Temperature,
+    bool LlmEnabled = true);

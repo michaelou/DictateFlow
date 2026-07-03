@@ -57,6 +57,52 @@ public sealed class PromptModeStore : IPromptModeStore
         }
     }
 
+    /// <inheritdoc />
+    public void Save(PromptMode mode)
+    {
+        if (PromptModeNameRules.Validate(mode.Name) is { } error)
+        {
+            throw new ArgumentException(error, nameof(mode));
+        }
+
+        var name = mode.Name.Trim();
+        lock (_gate)
+        {
+            var directory = _appPaths.PromptsDirectory;
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(
+                Path.Combine(directory, $"{name}.json"),
+                JsonSerializer.Serialize(mode with { Name = name }, WriteOptions));
+            _logger.LogInformation("Saved prompt mode '{Name}'", name);
+            _modes = Load();
+        }
+    }
+
+    /// <inheritdoc />
+    public void Delete(string name)
+    {
+        lock (_gate)
+        {
+            var directory = _appPaths.PromptsDirectory;
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
+            // Match by filename so a Name/filename casing mismatch still deletes the file.
+            var file = Directory.EnumerateFiles(directory, "*.json").FirstOrDefault(
+                f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+            if (file is null)
+            {
+                return;
+            }
+
+            File.Delete(file);
+            _logger.LogInformation("Deleted prompt mode file '{File}'", file);
+            _modes = Load();
+        }
+    }
+
     /// <summary>Seeds defaults if needed, then loads every parseable mode file.</summary>
     private IReadOnlyList<PromptMode> Load()
     {
@@ -100,13 +146,17 @@ public sealed class PromptModeStore : IPromptModeStore
         try
         {
             var mode = JsonSerializer.Deserialize<PromptMode>(File.ReadAllText(file), ReadOptions);
-            if (mode is null || string.IsNullOrWhiteSpace(mode.Name) || string.IsNullOrWhiteSpace(mode.SystemPrompt))
+            // A mode that skips the LLM never uses its system prompt, so it may be empty.
+            if (mode is null
+                || string.IsNullOrWhiteSpace(mode.Name)
+                || (mode.LlmEnabled && string.IsNullOrWhiteSpace(mode.SystemPrompt)))
             {
-                _logger.LogWarning("Skipping prompt file '{File}': Name and SystemPrompt are required", file);
+                _logger.LogWarning(
+                    "Skipping prompt file '{File}': Name is required, and SystemPrompt is required unless LlmEnabled is false", file);
                 return null;
             }
 
-            return mode with { Description = mode.Description ?? "" };
+            return mode with { Description = mode.Description ?? "", SystemPrompt = mode.SystemPrompt ?? "" };
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {

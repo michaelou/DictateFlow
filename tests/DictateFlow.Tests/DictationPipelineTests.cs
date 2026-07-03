@@ -89,6 +89,22 @@ public sealed class DictationPipelineTests
     }
 
     [Fact]
+    public async Task RunAsync_LlmDisabledMode_SkipsTheLlmAndDeliversTheRawTranscript()
+    {
+        _resolver.Setup(r => r.Resolve(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns<string, string>((transcript, mode)
+                => new PromptContext("", transcript, 0, 0, mode, LlmEnabled: false));
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("raw transcript", result.FinalText);
+        Assert.Null(result.ErrorMessage);
+        _llm.Verify(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(["transcribe", "gate", "history", "output"], _callOrder);
+    }
+
+    [Fact]
     public async Task RunAsync_UsesActivePromptModeFromSettings()
     {
         _appSettings.ActivePromptMode = "Email";

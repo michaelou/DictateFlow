@@ -368,7 +368,7 @@
                                Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Text="One JSON file per mode in the prompts folder. Edit or add files, then Reload to pick them up." />
+                               Text="Each mode is a JSON file in the prompts folder. Edit modes here, or edit the files externally and Reload to pick them up." />
 
                     <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Active mode" />
                     <ComboBox Width="220"
@@ -381,19 +381,51 @@
                     <ItemsControl ItemsSource="{Binding PromptModes}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
-                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
-                                    <TextBlock Margin="8,0,0,0"
-                                               Foreground="{StaticResource SecondaryTextBrush}"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding Description}" />
-                                </StackPanel>
+                                <DockPanel Margin="0,0,0,6">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Width="56"
+                                                Content="Edit"
+                                                Command="{Binding DataContext.EditPromptModeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Width="56"
+                                                Margin="6,0,0,0"
+                                                Content="Delete"
+                                                Command="{Binding DataContext.DeletePromptModeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                        <TextBlock Margin="6,0,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   Text="(LLM off)">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding LlmEnabled}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Margin="8,0,8,0"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding Description}" />
+                                    </StackPanel>
+                                </DockPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
                     <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                         <Button Width="88"
+                                Content="New mode"
+                                Command="{Binding NewPromptModeCommand}" />
+                        <Button Width="88"
+                                Margin="8,0,0,0"
                                 Content="Reload"
                                 Command="{Binding ReloadPromptsCommand}" />
                         <Button Width="140"
