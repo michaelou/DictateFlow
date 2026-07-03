@@ -10,8 +10,11 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Providers;
+using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Transfer;
 using DictateFlow.Core.Services.Usage;
+using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,9 +51,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
 
+        // Settings hardening (M8): validation, import/export and launch-with-Windows.
+        services.AddSingleton<ISettingsValidator, SettingsValidator>();
+        services.AddSingleton<ISettingsTransfer, SettingsTransfer>();
+        services.AddSingleton<IPromptsArchive, PromptsArchive>();
+        services.AddSingleton<Core.Services.Diagnostics.IDiagnosticsService, Core.Services.Diagnostics.DiagnosticsService>();
+        services.AddSingleton<IRunKeyStore, RegistryRunKeyStore>();
+        services.AddSingleton<IStartupRegistration, StartupRegistration>();
+
         services.AddSingleton<IWindowService, WindowService>();
         services.AddSingleton<IShutdownService, ShutdownService>();
         services.AddSingleton<ITrayIconService, TrayIconService>();
+        services.AddSingleton<IDialogService, DialogService>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IAudioRecorder, NAudioRecorder>();

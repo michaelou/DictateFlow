@@ -23,4 +23,13 @@ public interface ISettingsService
     /// <summary>Persists <see cref="Current"/> to disk as indented JSON.</summary>
     /// <param name="cancellationToken">Cancels the pending I/O.</param>
     Task SaveAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces <see cref="Current"/> with <paramref name="settings"/> and persists it —
+    /// used by settings import. Raises <see cref="SettingsChanged"/>, so hotkey and
+    /// provider selection re-apply without a restart.
+    /// </summary>
+    /// <param name="settings">The settings to take effect.</param>
+    /// <param name="cancellationToken">Cancels the pending I/O.</param>
+    Task ReplaceAsync(AppSettings settings, CancellationToken cancellationToken = default);
 }
