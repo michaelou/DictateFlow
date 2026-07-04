@@ -1,5 +1,6 @@
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
@@ -21,6 +22,7 @@ namespace DictateFlow.Tests;
 public sealed class DictationPipelineTests
 {
     private readonly Mock<ITranscriptionProvider> _transcription = new();
+    private readonly Mock<IVoiceCommandService> _voiceCommands = new();
     private readonly Mock<IPromptModeSelector> _modeSelector = new();
     private readonly Mock<IPromptResolver> _resolver = new();
     private readonly Mock<ILLMProvider> _llm = new();
@@ -35,6 +37,9 @@ public sealed class DictationPipelineTests
     {
         _settings.SetupGet(s => s.Current).Returns(_appSettings);
 
+        // Default voice command behavior mirrors a normal dictation: not a command.
+        _voiceCommands.Setup(v => v.TryHandleAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CommandOutcome?)null);
         // Default selector behavior mirrors the no-rule fallback: the active mode from settings.
         _modeSelector.Setup(s => s.SelectMode(It.IsAny<string>()))
             .Returns(() => _appSettings.ActivePromptMode);
@@ -60,8 +65,8 @@ public sealed class DictationPipelineTests
     }
 
     private DictationPipeline CreatePipeline()
-        => new(_transcription.Object, _modeSelector.Object, _resolver.Object, _llm.Object, _history.Object,
-            _output.Object, _gate.Object, TimeProvider.System,
+        => new(_transcription.Object, _voiceCommands.Object, _modeSelector.Object, _resolver.Object, _llm.Object,
+            _history.Object, _output.Object, _gate.Object, TimeProvider.System,
             Mock.Of<ILogger<DictationPipeline>>());
 
     private static PipelineRequest CreateRequest()
@@ -326,6 +331,78 @@ public sealed class DictationPipelineTests
         _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task RunAsync_CommandExecuted_SkipsLlmGateHistoryAndOutput()
+    {
+        var outcome = new CommandOutcome(CommandOutcomeStatus.Executed, "Test Command", "Test Command executed.");
+        _voiceCommands.Setup(v => v.TryHandleAsync("raw transcript", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(outcome);
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        // A command run pastes nothing and leaves no history entry; the outcome rides on the result.
+        Assert.True(result.Success);
+        Assert.Null(result.FinalText);
+        Assert.Equal("raw transcript", result.RawTranscript);
+        Assert.Null(result.ErrorMessage);
+        Assert.Same(outcome, result.Command);
+        _llm.Verify(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()), Times.Never);
+        _gate.Verify(g => g.ConfirmAsync(It.IsAny<PipelineResult>()), Times.Never);
+        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
+        Assert.Equal(["transcribe"], _callOrder);
+    }
+
+    [Fact]
+    public async Task RunAsync_CommandDetectionSeesTheRawTranscriptNotTheEnhancement()
+    {
+        await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        // The command branch runs on the raw transcript before any LLM involvement.
+        _voiceCommands.Verify(v => v.TryHandleAsync("raw transcript", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_UnknownCommand_FailsWithTheOutcomeMessageAndExecutesNothing()
+    {
+        var outcome = new CommandOutcome(CommandOutcomeStatus.Unknown, null, "Unknown voice command.");
+        _voiceCommands.Setup(v => v.TryHandleAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(outcome);
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("Unknown voice command.", result.ErrorMessage);
+        Assert.Same(outcome, result.Command);
+        _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
+        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunAsync_DeclinedCommand_EndsQuietlyLikeACancel()
+    {
+        _voiceCommands.Setup(v => v.TryHandleAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CommandOutcome(CommandOutcomeStatus.Declined, "Deploy", "Deploy was not executed."));
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.FinalText);
+        Assert.Null(result.ErrorMessage);
+        Assert.Equal(CommandOutcomeStatus.Declined, result.Command?.Status);
+    }
+
+    [Fact]
+    public async Task RunAsync_NotACommand_DictationBehavesExactlyAsBefore()
+    {
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("[enhanced] raw transcript", result.FinalText);
+        Assert.Null(result.Command);
+        Assert.Equal(["transcribe", "llm", "gate", "history", "output"], _callOrder);
+    }
+
     /// <summary>
     /// End-to-end without network or UI: mock speech, a real resolver (store seeded into a
     /// temp dir), mock LLM, a real SQLite history repository and a pass-through gate — a
@@ -354,7 +431,7 @@ public sealed class DictationPipelineTests
         var modeSelector = new PromptModeSelector(_settings.Object, NullLogger<PromptModeSelector>.Instance);
 
         var pipeline = new DictationPipeline(
-            speech, modeSelector, resolver, llm, history, _output.Object, _gate.Object,
+            speech, _voiceCommands.Object, modeSelector, resolver, llm, history, _output.Object, _gate.Object,
             TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
         var result = await pipeline.RunAsync(CreateRequest(), CancellationToken.None);

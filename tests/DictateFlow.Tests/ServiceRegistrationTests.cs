@@ -3,6 +3,7 @@ using DictateFlow.App.Services;
 using DictateFlow.App.Services.Output;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
@@ -143,6 +144,28 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<Core.Services.Diagnostics.IDiagnosticsService>());
         Assert.NotNull(provider.GetRequiredService<Core.Services.Startup.IStartupRegistration>());
         Assert.NotNull(provider.GetRequiredService<IDialogService>());
+    }
+
+    [Fact]
+    public void AddDictateFlow_ResolvesVoiceCommandServices()
+    {
+        using var provider = BuildProvider();
+
+        Assert.IsType<VoiceCommandService>(provider.GetRequiredService<IVoiceCommandService>());
+        Assert.NotNull(provider.GetRequiredService<IWakePhraseDetector>());
+        Assert.NotNull(provider.GetRequiredService<ICommandMatcher>());
+        // Fail closed until issue #30 registers the dialog implementation.
+        Assert.IsType<DenyingCommandConfirmationService>(provider.GetRequiredService<ICommandConfirmationService>());
+
+        // The mock action is the whole allowlist for now; its definition source makes
+        // "test command" an end-to-end voice command out of the box.
+        var resolver = provider.GetRequiredService<ICommandActionResolver>();
+        Assert.Equal([MockCommandAction.RegistrationName], resolver.GetActionTypes());
+        Assert.True(resolver.TryResolve(MockCommandAction.RegistrationName, out var action));
+        Assert.IsType<MockCommandAction>(action);
+        var definitions = provider.GetServices<ICommandDefinitionSource>()
+            .SelectMany(s => s.GetDefinitions()).ToList();
+        Assert.Contains(definitions, d => d.ActionType == MockCommandAction.RegistrationName);
     }
 
     [Fact]

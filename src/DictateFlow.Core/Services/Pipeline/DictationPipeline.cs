@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using DictateFlow.Core.Models;
+using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
@@ -11,11 +12,14 @@ namespace DictateFlow.Core.Services.Pipeline;
 
 /// <summary>
 /// Default <see cref="IDictationPipeline"/> implementation:
-/// transcription → prompt-mode selection → prompt resolution → LLM → output gate →
-/// history → output. Depends only on Core abstractions — the injected providers are the
-/// registry-backed defaults, which resolve the active provider from settings on every call,
-/// so changes apply live and the pipeline itself carries no provider knowledge. Every run
-/// ends with one Debug summary line carrying the per-stage latencies.
+/// transcription → voice command detection → prompt-mode selection → prompt resolution →
+/// LLM → output gate → history → output. Depends only on Core abstractions — the injected
+/// providers are the registry-backed defaults, which resolve the active provider from
+/// settings on every call, so changes apply live and the pipeline itself carries no provider
+/// knowledge. Every run ends with one Debug summary line carrying the per-stage latencies.
+/// An utterance recognized as a voice command (issue #26) branches off right after
+/// transcription: the command executes and the run ends — no LLM enhancement, no history
+/// entry, no paste.
 /// </summary>
 /// <remarks>
 /// Failure policy: a transcription failure fails the run; an LLM failure degrades to the raw
@@ -27,6 +31,7 @@ namespace DictateFlow.Core.Services.Pipeline;
 public sealed class DictationPipeline : IDictationPipeline
 {
     private readonly ITranscriptionProvider _transcriptionProvider;
+    private readonly IVoiceCommandService _voiceCommandService;
     private readonly IPromptModeSelector _promptModeSelector;
     private readonly IPromptResolver _promptResolver;
     private readonly ILLMProvider _llmProvider;
@@ -38,6 +43,7 @@ public sealed class DictationPipeline : IDictationPipeline
 
     /// <summary>Initializes a new instance of the <see cref="DictationPipeline"/> class.</summary>
     /// <param name="transcriptionProvider">Converts the capture into text.</param>
+    /// <param name="voiceCommandService">Handles the transcript as a voice command when it is one.</param>
     /// <param name="promptModeSelector">Picks the prompt mode from the application rules (or the active mode).</param>
     /// <param name="promptResolver">Builds the LLM prompt context for the transcript.</param>
     /// <param name="llmProvider">Enhances the transcript.</param>
@@ -48,6 +54,7 @@ public sealed class DictationPipeline : IDictationPipeline
     /// <param name="logger">Receives diagnostic output.</param>
     public DictationPipeline(
         ITranscriptionProvider transcriptionProvider,
+        IVoiceCommandService voiceCommandService,
         IPromptModeSelector promptModeSelector,
         IPromptResolver promptResolver,
         ILLMProvider llmProvider,
@@ -58,6 +65,7 @@ public sealed class DictationPipeline : IDictationPipeline
         ILogger<DictationPipeline> logger)
     {
         _transcriptionProvider = transcriptionProvider;
+        _voiceCommandService = voiceCommandService;
         _promptModeSelector = promptModeSelector;
         _promptResolver = promptResolver;
         _llmProvider = llmProvider;
@@ -113,11 +121,34 @@ public sealed class DictationPipeline : IDictationPipeline
             }
         }
 
-        // 2. Enhance. A failure degrades to the raw transcript with a warning for the gate.
+        // 2. Voice command branch (issue #26): runs on the raw transcript, before any LLM
+        //    involvement, so commands stay deterministic. A handled command ends the run —
+        //    nothing is enhanced, written to history, or pasted. Not-a-command (null) falls
+        //    through to normal dictation unchanged.
+        var commandStopwatch = Stopwatch.StartNew();
+        var commandOutcome = await _voiceCommandService.TryHandleAsync(transcript, cancellationToken)
+            .ConfigureAwait(false);
+        if (commandOutcome is not null)
+        {
+            timings.CommandMs = commandStopwatch.ElapsedMilliseconds;
+            _logger.LogInformation(
+                "Voice command handled ({Status}) in {ElapsedMs} ms: {Message}",
+                commandOutcome.Status, timings.CommandMs, commandOutcome.Message);
+            // Executed and Declined are successful ends of the run; Failed and Unknown
+            // surface the outcome message the way any pipeline failure does.
+            var isCommandSuccess = commandOutcome.Status
+                is CommandOutcomeStatus.Executed or CommandOutcomeStatus.Declined;
+            return new PipelineResult(
+                isCommandSuccess, null, transcript,
+                isCommandSuccess ? null : commandOutcome.Message,
+                Command: commandOutcome);
+        }
+
+        // 3. Enhance. A failure degrades to the raw transcript with a warning for the gate.
         var (finalText, warning) = await EnhanceAsync(transcript, request.ApplicationName, timings, cancellationToken)
             .ConfigureAwait(false);
 
-        // 3. Gate: pass-through in Automatic mode, preview dialog in Preview mode.
+        // 4. Gate: pass-through in Automatic mode, preview dialog in Preview mode.
         string? confirmedText;
         var gateStopwatch = Stopwatch.StartNew();
         try
@@ -141,7 +172,7 @@ public sealed class DictationPipeline : IDictationPipeline
             return new PipelineResult(true, null, transcript, null);
         }
 
-        // 4. History — written only for text that is actually being delivered (see class remarks),
+        // 5. History — written only for text that is actually being delivered (see class remarks),
         //    and before delivery so a paste failure cannot lose the confirmed text.
         try
         {
@@ -158,7 +189,7 @@ public sealed class DictationPipeline : IDictationPipeline
             _logger.LogError(ex, "History write failed; continuing with output");
         }
 
-        // 5. Output. The injected provider is the registry-backed default, which selects the
+        // 6. Output. The injected provider is the registry-backed default, which selects the
         //    active provider from settings per call — changes apply live.
         try
         {
@@ -249,6 +280,7 @@ public sealed class DictationPipeline : IDictationPipeline
     {
         public long? TranscriptionMs { get; set; }
         public double? AudioSeconds { get; set; }
+        public long? CommandMs { get; set; }
         public long? EnhancementMs { get; set; }
         public long? GateMs { get; set; }
         public long? HistoryMs { get; set; }
@@ -259,7 +291,8 @@ public sealed class DictationPipeline : IDictationPipeline
         public void LogSummary(ILogger logger, long totalMs)
             => logger.LogDebug(
                 "Dictation latency summary: total {TotalMs} ms (audio ~{AudioSeconds:F1} s, transcription {TranscriptionMs} ms, "
-                + "enhancement {EnhancementMs} ms, gate {GateMs} ms, history {HistoryMs} ms, output {OutputMs} ms), mode '{ModeName}'",
-                totalMs, AudioSeconds, TranscriptionMs, EnhancementMs, GateMs, HistoryMs, OutputMs, ModeName);
+                + "command {CommandMs} ms, enhancement {EnhancementMs} ms, gate {GateMs} ms, history {HistoryMs} ms, "
+                + "output {OutputMs} ms), mode '{ModeName}'",
+                totalMs, AudioSeconds, TranscriptionMs, CommandMs, EnhancementMs, GateMs, HistoryMs, OutputMs, ModeName);
     }
 }

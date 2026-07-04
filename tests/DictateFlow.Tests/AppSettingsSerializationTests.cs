@@ -56,6 +56,15 @@ public sealed class AppSettingsSerializationTests
 
         Assert.Equal("Information", root.GetProperty("Logging").GetProperty("MinimumLevel").GetString());
 
+        // Voice commands (issue #26) ship disabled with safe defaults.
+        var voiceCommands = root.GetProperty("VoiceCommands");
+        Assert.False(voiceCommands.GetProperty("Enabled").GetBoolean());
+        Assert.Equal("Hey John", voiceCommands.GetProperty("WakePhrase").GetString());
+        Assert.True(voiceCommands.GetProperty("WakePhraseEnabled").GetBoolean());
+        Assert.Equal(30, voiceCommands.GetProperty("CommandTimeoutSeconds").GetInt32());
+        Assert.False(voiceCommands.GetProperty("RequireConfirmation").GetBoolean());
+        Assert.True(voiceCommands.GetProperty("EnableSounds").GetBoolean());
+
         Assert.Equal("Raw", root.GetProperty("ActivePromptMode").GetString());
         Assert.Equal(0, root.GetProperty("TechnicalDictionary").GetArrayLength());
         Assert.Equal(0, root.GetProperty("ApplicationRules").GetArrayLength());

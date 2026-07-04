@@ -408,6 +408,64 @@ public sealed class SettingsValidatorTests
     }
 
     [Fact]
+    public void VoiceCommandsEnabledWithBlankWakePhrase_IsVoiceCommandsError()
+    {
+        var settings = new AppSettings();
+        settings.VoiceCommands.Enabled = true;
+        settings.VoiceCommands.WakePhrase = "  ";
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Voice Commands");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+        Assert.Contains("wake phrase", finding.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void VoiceCommandsBlankWakePhraseWhileWakePhraseDisabled_HasNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.VoiceCommands.Enabled = true;
+        settings.VoiceCommands.WakePhrase = "";
+        settings.VoiceCommands.WakePhraseEnabled = false;
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(601)]
+    public void VoiceCommandTimeoutOutOfRange_IsVoiceCommandsError(int seconds)
+    {
+        var settings = new AppSettings();
+        settings.VoiceCommands.Enabled = true;
+        settings.VoiceCommands.CommandTimeoutSeconds = seconds;
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Voice Commands");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+        Assert.Contains("timeout", finding.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void VoiceCommandsDisabled_MisconfigurationStaysSilent()
+    {
+        // The feature is off: nothing can execute, so a broken section is not worth a finding.
+        var settings = new AppSettings();
+        settings.VoiceCommands.Enabled = false;
+        settings.VoiceCommands.WakePhrase = "";
+        settings.VoiceCommands.CommandTimeoutSeconds = 0;
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Fact]
+    public void VoiceCommandsEnabledDefaults_HaveNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.VoiceCommands.Enabled = true;
+
+        Assert.Empty(CreateValidator("Raw").Validate(settings));
+    }
+
+    [Fact]
     public void Findings_AreOrderedErrorsFirst()
     {
         var settings = new AppSettings { ActivePromptMode = "Vanished" }; // warning
