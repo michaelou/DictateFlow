@@ -23,6 +23,7 @@ Microphone → Speech Recognition → Prompt Resolution → LLM Enhancement → 
 
 - **Azure AI Foundry** — cloud transcription via Azure-hosted models.
 - **Azure Speech** — real-time streaming recognition through the Azure Speech SDK.
+- **Parakeet TDT v3 (fully offline)** — NVIDIA's multilingual speech model (25 European languages, auto-detected) running in-process through the bundled sherpa-onnx runtime; model files download from within Settings with pinned SHA-256 verification.
 - **whisper.cpp (fully offline)** — local transcription with no cloud dependency:
   - Built-in **model manager**: download the whisper.cpp engine and Whisper Small/Medium models from within Settings, with progress, cancel, verify, and delete.
   - Every download is pinned by size and SHA-256 checksum and verified against known-good values.
@@ -49,7 +50,7 @@ Smart mode selection:
 - **Technical dictionary** — a user-defined list of terms (product names, jargon, identifiers) that the LLM is instructed never to alter.
 - **Per-application rules** — map foreground apps to prompt modes (e.g. Outlook → Email, Visual Studio → TechnicalSpec). The rule matching the app you were in when recording started wins; otherwise the active mode applies.
 
-LLM providers: **Azure AI Foundry** and a **Mock** provider, with per-provider temperature/max-token defaults and a "Test connection" button in Settings.
+LLM providers: **Anthropic (Claude)**, **Ollama** (local server or Ollama Cloud), **Azure AI Foundry**, and a **Mock** provider — each with per-provider temperature/max-token defaults and a "Test connection" button in Settings.
 
 ## Output delivery
 

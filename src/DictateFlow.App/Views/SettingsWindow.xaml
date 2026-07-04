@@ -355,6 +355,40 @@
                                  Text="{Binding WhisperTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
+                    <!-- Local Parakeet config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="Parakeet">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="NVIDIA Parakeet TDT 0.6B v3 running locally through the bundled sherpa-onnx runtime — fast, fully offline, multilingual (25 European languages, auto-detected)." />
+
+                        <TextBlock Margin="0,12,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ParakeetStatusText}" />
+                        <Button Width="160"
+                                Margin="0,8,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Manage local models…"
+                                Command="{Binding OpenLocalModelsCommand}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding ParakeetTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
                     <Button Width="140"
                             Margin="0,16,0,0"
                             HorizontalAlignment="Left"
@@ -390,10 +424,11 @@
                                Foreground="{StaticResource SecondaryTextBrush}"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Text="The engine and models used by the Local Whisper.cpp speech provider — fully offline transcription. Downloads are verified (SHA-256) and usable immediately, no restart needed." />
+                               Text="The engines and models used by the local speech providers (Whisper.cpp and Parakeet) — fully offline transcription. Downloads are verified (SHA-256) and usable immediately, no restart needed." />
 
-                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Speech engine" />
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Speech engines" />
                     <TextBlock Text="{Binding WhisperEngineStatus}" />
+                    <TextBlock Margin="0,4,0,0" Text="{Binding ParakeetEngineStatus}" />
 
                     <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Components" />
                     <ItemsControl ItemsSource="{Binding LocalModels}">
@@ -587,6 +622,132 @@
                         <TextBox Width="80"
                                  HorizontalAlignment="Left"
                                  Text="{Binding LlmTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <!-- Anthropic config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedLlmProvider}" Value="Anthropic">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Claude via the Anthropic API. Get a key at console.anthropic.com; claude-opus-4-8 is the most capable model, claude-haiku-4-5 the fastest and cheapest." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding AnthropicApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Model" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AnthropicModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–1)" />
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="220"
+                                    VerticalAlignment="Center"
+                                    Minimum="0"
+                                    Maximum="1"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding AnthropicTemperature}" />
+                            <TextBox Width="60"
+                                     Margin="8,0,0,0"
+                                     Text="{Binding AnthropicTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="Default for modes without their own temperature. Current Claude models fix the temperature; the provider adapts automatically." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AnthropicMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding AnthropicTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <!-- Ollama config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedLlmProvider}" Value="Ollama">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="A local Ollama server (default) or Ollama Cloud. The model must be pulled first (ollama pull &lt;model&gt;); for Ollama Cloud set the base URL to https://ollama.com and enter an API key." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Base URL" />
+                        <TextBox Width="340"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OllamaBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key (optional)" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding OllamaApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   Text="Leave empty for a local server; required for Ollama Cloud." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Model" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OllamaModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–2)" />
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="220"
+                                    VerticalAlignment="Center"
+                                    Minimum="0"
+                                    Maximum="2"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding OllamaTemperature}" />
+                            <TextBox Width="60"
+                                     Margin="8,0,0,0"
+                                     Text="{Binding OllamaTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   Text="Default for modes without their own temperature." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OllamaMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OllamaTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
                     <!-- Mock config section -->
