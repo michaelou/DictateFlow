@@ -80,7 +80,7 @@ public sealed class CommandActionRegistrationTests
     public async Task MockCommandAction_ReportsSuccess()
     {
         var action = new MockCommandAction(Mock.Of<ILogger<MockCommandAction>>());
-        var context = new CommandContext("Test Command", "Mock", "", "", "test command", DateTime.UtcNow);
+        var context = new CommandContext("Test Command", "Mock", "", "", "", "test command", DateTime.UtcNow);
 
         var result = await action.ExecuteAsync(context, CancellationToken.None);
 

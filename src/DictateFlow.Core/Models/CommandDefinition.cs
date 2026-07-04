@@ -36,6 +36,16 @@ public sealed class CommandDefinition
     public string ActionValue { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the optional action arguments template (JSON <c>action.arguments</c>) —
+    /// used only by action types that take arguments (e.g. <c>ProcessStart</c>'s process
+    /// arguments). It may contain the <c>{{Argument}}</c> placeholder, into which the spoken
+    /// utterance remainder is substituted with type-appropriate escaping. The executable or
+    /// target in <see cref="ActionValue"/> is always configuration and never carries the
+    /// placeholder — the spoken text can only ever reach the substitution points chosen here.
+    /// </summary>
+    public string ActionArguments { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets a value indicating whether the user must approve execution in a
     /// confirmation dialog. Independent of the global require-confirmation setting, which
     /// forces confirmation for every command.

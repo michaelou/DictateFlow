@@ -179,6 +179,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICommandDefinitionSource, MockCommandDefinitionSource>();
         services.AddCommandAction<MockCommandAction>(MockCommandAction.RegistrationName);
 
+        // Built-in launch actions (issue #27): each registers like a provider — one line — and
+        // becomes part of the fixed allowlist. All three share one process-launch seam so they
+        // stay testable. The built-in command set plus the user JSON command store are two more
+        // definition sources the matcher aggregates automatically.
+        services.TryAddSingleton<IProcessLauncher, ProcessLauncher>();
+        services.AddCommandAction<ProcessStartAction>(ProcessStartAction.RegistrationName);
+        services.AddCommandAction<OpenUrlAction>(OpenUrlAction.RegistrationName);
+        services.AddCommandAction<OpenFolderAction>(OpenFolderAction.RegistrationName);
+        services.AddSingleton<ICommandDefinitionSource, BuiltInCommandDefinitionSource>();
+        services.AddSingleton<CommandStore>();
+        services.AddSingleton<ICommandDefinitionSource>(sp => sp.GetRequiredService<CommandStore>());
+
         // Output pipeline (M5): history write, the mode-aware confirmation gate, and the
         // orchestrator itself.
         services.AddSingleton<IHistoryRepository, SqliteHistoryRepository>();

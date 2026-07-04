@@ -52,6 +52,9 @@ public sealed class AppPaths : IAppPaths
     public string PromptsDirectory => Path.Combine(RootDirectory, "Prompts");
 
     /// <inheritdoc />
+    public string CommandsDirectory => Path.Combine(RootDirectory, "Commands");
+
+    /// <inheritdoc />
     public string EnginesDirectory => Path.Combine(_localDataDirectory, "Engines");
 
     /// <inheritdoc />
@@ -63,6 +66,7 @@ public sealed class AppPaths : IAppPaths
         Directory.CreateDirectory(RootDirectory);
         Directory.CreateDirectory(LogsDirectory);
         Directory.CreateDirectory(PromptsDirectory);
+        Directory.CreateDirectory(CommandsDirectory);
         Directory.CreateDirectory(EnginesDirectory);
         Directory.CreateDirectory(ModelsDirectory);
     }
