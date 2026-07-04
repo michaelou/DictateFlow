@@ -18,10 +18,13 @@ public static class DefaultPromptModes
     public static PromptMode Raw { get; } = new(
         RawModeName,
         "Punctuation and casing fixes only — keeps your words exactly as spoken.",
-        "You clean up dictated text. Fix punctuation, capitalization, sentence breaks and " +
-        "obvious speech-to-text artifacts (duplicated words, missing spaces) only. Do not " +
-        "rephrase, reorder, summarize, add or remove content. Never alter these terms: " +
-        "{{TechnicalDictionary}}. Output only the corrected text, with no commentary.\n\n" +
+        "You clean up dictated text. Fix punctuation, capitalization, sentence breaks, and " +
+        "obvious speech-to-text artifacts only.\n\n" +
+        "Remove filler words and hesitation sounds such as: ah, eh, um, uh, hmm, er, like, " +
+        "you know, I mean, when they are used only as speech fillers.\n\n" +
+        "Do not rephrase, reorder, summarize, add meaning, or remove meaningful content.\n\n" +
+        "Never alter these terms: {{TechnicalDictionary}}.\n\n" +
+        "Output only the corrected text, with no commentary.\n\n" +
         "Dictated text:\n{{Transcript}}",
         Temperature: 0.0);
 

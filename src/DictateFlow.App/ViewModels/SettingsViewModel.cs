@@ -17,6 +17,7 @@ using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Transfer;
+using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Core.Services.Models;
 using DictateFlow.Providers.Anthropic;
@@ -124,6 +125,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IPromptsArchive _promptsArchive;
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly IDialogService _dialogService;
+    private readonly IWindowService _windowService;
+    private readonly IUpdateService _updateService;
     private readonly WhisperCppModelManager _whisperModelManager;
     private readonly ParakeetModelManager _parakeetModelManager;
     private readonly ILogger<SettingsViewModel> _logger;
@@ -147,6 +150,8 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="promptsArchive">Exports and imports the prompts folder as a zip.</param>
     /// <param name="diagnosticsService">Supplies versions, the log tail and the copyable report.</param>
     /// <param name="dialogService">File pickers and confirmation prompts.</param>
+    /// <param name="windowService">Opens the History, Cost Dashboard and Update windows from the side panel.</param>
+    /// <param name="updateService">Checks GitHub for a newer release for the "Check for updates" action.</param>
     /// <param name="whisperModelManager">Manages the local whisper.cpp engine and models (Local Models page).</param>
     /// <param name="parakeetModelManager">Manages the local Parakeet model files (Local Models page).</param>
     /// <param name="logger">Receives diagnostic output.</param>
@@ -164,6 +169,8 @@ public partial class SettingsViewModel : ObservableObject
         IPromptsArchive promptsArchive,
         IDiagnosticsService diagnosticsService,
         IDialogService dialogService,
+        IWindowService windowService,
+        IUpdateService updateService,
         WhisperCppModelManager whisperModelManager,
         ParakeetModelManager parakeetModelManager,
         ILogger<SettingsViewModel> logger)
@@ -180,6 +187,8 @@ public partial class SettingsViewModel : ObservableObject
         _promptsArchive = promptsArchive;
         _diagnosticsService = diagnosticsService;
         _dialogService = dialogService;
+        _windowService = windowService;
+        _updateService = updateService;
         _whisperModelManager = whisperModelManager;
         _parakeetModelManager = parakeetModelManager;
         _logger = logger;
@@ -963,6 +972,26 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Jumps from the Speech page to the Local Models page.</summary>
     [RelayCommand]
     private void OpenLocalModels() => SelectedSection = "Local Models";
+
+    /// <summary>Opens the History window (same action as the tray menu).</summary>
+    [RelayCommand]
+    private void ShowHistory() => _windowService.ShowHistoryWindow();
+
+    /// <summary>Opens the Cost Dashboard window (same action as the tray menu).</summary>
+    [RelayCommand]
+    private void ShowCostDashboard() => _windowService.ShowCostDashboardWindow();
+
+    /// <summary>
+    /// Checks GitHub for a newer release and shows the result dialog (same action as the tray
+    /// menu). The check itself never throws; offline/network failures come back as a message.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        _logger.LogInformation("Checking for updates from Settings window");
+        var result = await _updateService.CheckForUpdatesAsync();
+        _windowService.ShowUpdateWindow(result);
+    }
 
     /// <summary>
     /// Downloads, verifies and installs one component, reporting progress on the row. The

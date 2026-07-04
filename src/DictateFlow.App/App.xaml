@@ -11,7 +11,8 @@
 
             <tray:TaskbarIcon x:Key="TrayIcon"
                               ToolTipText="DictateFlow"
-                              IconSource="/Resources/appicon.ico">
+                              IconSource="/Resources/appicon.ico"
+                              DoubleClickCommand="{Binding OpenSettingsCommand}">
                 <tray:TaskbarIcon.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Dictate" Command="{Binding DictateCommand}" />

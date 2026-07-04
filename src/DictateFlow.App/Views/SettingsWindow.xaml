@@ -30,11 +30,34 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <ListBox Grid.Row="0"
-                 Grid.Column="0"
-                 Margin="0,0,8,0"
-                 ItemsSource="{Binding Sections}"
-                 SelectedItem="{Binding SelectedSection}" />
+        <Grid Grid.Row="0"
+              Grid.Column="0"
+              Margin="0,0,8,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ListBox Grid.Row="0"
+                     ItemsSource="{Binding Sections}"
+                     SelectedItem="{Binding SelectedSection}" />
+
+            <StackPanel Grid.Row="1" Margin="0,8,0,0">
+                <Separator Margin="0,0,0,4" />
+                <Button Margin="0,2,0,0"
+                        HorizontalContentAlignment="Left"
+                        Content="Show History"
+                        Command="{Binding ShowHistoryCommand}" />
+                <Button Margin="0,2,0,0"
+                        HorizontalContentAlignment="Left"
+                        Content="Show Cost Dashboard"
+                        Command="{Binding ShowCostDashboardCommand}" />
+                <Button Margin="0,2,0,0"
+                        HorizontalContentAlignment="Left"
+                        Content="Check for Updates…"
+                        Command="{Binding CheckForUpdatesCommand}" />
+            </StackPanel>
+        </Grid>
 
         <Border Grid.Row="0"
                 Grid.Column="1"
