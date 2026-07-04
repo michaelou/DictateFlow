@@ -16,8 +16,11 @@ using DictateFlow.Core.Services.Transfer;
 using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
+using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
+using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -93,10 +96,16 @@ public static class ServiceCollectionExtensions
         // before their AddXProvider lines so their typed-client lifetime wins.
         services.AddAzureFoundryTranscription();
         services.AddAzureFoundryLlm();
+        services.AddAnthropicLlm();
+        services.AddOllamaLlm();
 
         // Local whisper.cpp: model manager (downloads/verifies the engine and models) plus
         // its download HTTP client; the provider itself is registered below like any other.
         services.AddWhisperCppTranscription();
+
+        // Local Parakeet TDT v3 (sherpa-onnx, in-process): model manager plus its download
+        // HTTP client; the provider itself is registered below like any other.
+        services.AddParakeetTranscription();
 
         // Mock providers are registered first: the first name of a kind is the fallback used
         // when the configured active name is unknown (and the dropdown default). Mocks and
@@ -112,8 +121,16 @@ public static class ServiceCollectionExtensions
             AzureSpeechProviders.RegistrationName, requiresConnection: false);
         services.AddTranscriptionProvider<WhisperCppTranscriptionProvider>(
             WhisperCppProviders.RegistrationName, requiresConnection: false);
+        // Local Parakeet TDT v3: no endpoint/credentials — the provider validates its own
+        // installation state per call, like WhisperCpp.
+        services.AddTranscriptionProvider<ParakeetTranscriptionProvider>(
+            ParakeetProviders.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<AzureFoundryLLMProvider>(AzureFoundryProviders.RegistrationName);
+        // Anthropic and Ollama validate their key/URL themselves per call — the generic
+        // Endpoint/DeploymentName connection validation does not fit either of them.
+        services.AddLLMProvider<AnthropicLLMProvider>(AnthropicProviders.RegistrationName, requiresConnection: false);
+        services.AddLLMProvider<OllamaLLMProvider>(OllamaProviders.RegistrationName, requiresConnection: false);
         services.AddOutputProvider<ClipboardPasteOutputProvider>(OutputProviderNames.ClipboardPaste);
         services.AddOutputProvider<SimulatedKeyboardOutputProvider>(OutputProviderNames.SimulatedKeyboard);
         // The sample provider proving the extensibility claim: this line is its entire integration.

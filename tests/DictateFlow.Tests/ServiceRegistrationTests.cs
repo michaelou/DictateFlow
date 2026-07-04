@@ -12,8 +12,11 @@ using DictateFlow.Core.Services.Providers;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Models;
+using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
+using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,10 +62,12 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<AzureFoundryTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureSpeechTranscriptionProvider>());
         Assert.NotNull(provider.GetRequiredService<WhisperCppTranscriptionProvider>());
-        Assert.IsType<WhisperCppModelManager>(provider.GetRequiredService<IModelManager>());
-        Assert.Same(
-            provider.GetRequiredService<WhisperCppModelManager>(),
-            provider.GetRequiredService<IModelManager>());
+        Assert.NotNull(provider.GetRequiredService<ParakeetTranscriptionProvider>());
+
+        // One model manager per local engine; both are discoverable through IModelManager.
+        var managers = provider.GetServices<IModelManager>().ToList();
+        Assert.Contains(provider.GetRequiredService<WhisperCppModelManager>(), managers);
+        Assert.Contains(provider.GetRequiredService<ParakeetModelManager>(), managers);
         Assert.NotNull(provider.GetRequiredService<IDictationFailureNotifier>());
     }
 
@@ -87,10 +92,10 @@ public sealed class ServiceRegistrationTests : IDisposable
         var registry = provider.GetRequiredService<IProviderRegistry>();
 
         Assert.Equal(
-            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AzureSpeechProviders.RegistrationName, WhisperCppProviders.RegistrationName],
+            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AzureSpeechProviders.RegistrationName, WhisperCppProviders.RegistrationName, ParakeetProviders.RegistrationName],
             registry.GetNames(ProviderKind.Transcription));
         Assert.Equal(
-            [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName],
+            [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AnthropicProviders.RegistrationName, OllamaProviders.RegistrationName],
             registry.GetNames(ProviderKind.Llm));
         Assert.Equal(
             [OutputProviderNames.ClipboardPaste, OutputProviderNames.SimulatedKeyboard, NullOutputProvider.RegistrationName],
@@ -117,6 +122,8 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.IsType<ActiveLLMProvider>(provider.GetRequiredService<ILLMProvider>());
         Assert.NotNull(provider.GetRequiredService<MockLLMProvider>());
         Assert.NotNull(provider.GetRequiredService<AzureFoundryLLMProvider>());
+        Assert.NotNull(provider.GetRequiredService<AnthropicLLMProvider>());
+        Assert.NotNull(provider.GetRequiredService<OllamaLLMProvider>());
         Assert.NotNull(provider.GetRequiredService<IPromptModeStore>());
         Assert.NotNull(provider.GetRequiredService<IPromptResolver>());
         Assert.NotNull(provider.GetRequiredService<IForegroundAppService>());

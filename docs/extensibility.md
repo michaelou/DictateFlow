@@ -4,8 +4,8 @@ DictateFlow has three replaceable provider slots, one per pipeline stage:
 
 | Kind | Interface | Built-in providers |
 |---|---|---|
-| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry`, `AzureSpeech`, `WhisperCpp` |
-| `Llm` | `ILLMProvider` | `Mock`, `AzureFoundry` |
+| `Transcription` | `ITranscriptionProvider` | `Mock`, `AzureFoundry`, `AzureSpeech`, `WhisperCpp`, `Parakeet` |
+| `Llm` | `ILLMProvider` | `Mock`, `AzureFoundry`, `Anthropic`, `Ollama` |
 | `Output` | `IOutputProvider` | `ClipboardPaste`, `SimulatedKeyboard`, `Null` (sample) |
 
 Adding a provider is **one class + one registration line**. Nothing else changes: the
