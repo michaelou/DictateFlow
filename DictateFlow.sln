@@ -23,6 +23,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.Whisp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.AzureSpeech", "src\DictateFlow.Providers.AzureSpeech\DictateFlow.Providers.AzureSpeech.csproj", "{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.Anthropic", "src\DictateFlow.Providers.Anthropic\DictateFlow.Providers.Anthropic.csproj", "{F6413DD8-E615-4DDD-9117-712EB13413A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.Parakeet", "src\DictateFlow.Providers.Parakeet\DictateFlow.Providers.Parakeet.csproj", "{EA28DED0-F3A8-495C-8E91-2FBF53F35F3A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -129,5 +133,7 @@ Global
 		{989C2BEA-0452-415A-AA59-7D398226DB6C} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{D57BD824-32C2-4D56-A776-9526393A9778} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{F6413DD8-E615-4DDD-9117-712EB13413A1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{EA28DED0-F3A8-495C-8E91-2FBF53F35F3A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
