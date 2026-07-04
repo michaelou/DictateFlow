@@ -138,8 +138,14 @@ public sealed class DictationController : IDictationController, IDisposable
                 _isRecording = false;
             }
 
-            _overlay.Hide();
+            // Most commonly the microphone is missing, in use, or blocked by privacy settings.
+            // The app must stay alive; surface a short, user-presentable reason rather than
+            // silently hiding the overlay (no raw exception text — the details are in the log).
             _logger.LogError(ex, "Failed to start recording");
+            const string message = "Couldn't start recording — no microphone is available or it is in use by another app.";
+            _overlay.ShowError(Shorten(message));
+            DictationFailed?.Invoke(this, new DictationFailedEventArgs(message, isConfigurationError: false));
+            RunGuarded(() => HideOverlayAfterDelayAsync(ErrorOverlayDuration));
         }
     }
 

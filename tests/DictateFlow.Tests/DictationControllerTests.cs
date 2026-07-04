@@ -132,16 +132,21 @@ public sealed class DictationControllerTests
     }
 
     [Fact]
-    public async Task StartRecordingAsync_WhenRecorderThrows_ResetsStateAndHidesOverlay()
+    public async Task StartRecordingAsync_WhenRecorderThrows_ResetsStateAndSurfacesError()
     {
+        // A missing/in-use microphone surfaces here as a StartAsync failure. The app must
+        // stay alive and tell the user why, rather than silently doing nothing.
         _recorder.Setup(r => r.StartAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("no device"));
         var controller = CreateController();
+        string? failure = null;
+        controller.DictationFailed += (_, e) => failure = e.Message;
 
-        await controller.StartRecordingAsync();
+        await controller.StartRecordingAsync(); // must not throw — the app keeps running
 
         Assert.False(controller.IsRecording);
-        _overlay.Verify(o => o.Hide(), Times.Once);
+        Assert.NotNull(failure);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

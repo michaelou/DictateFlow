@@ -66,6 +66,18 @@ public sealed class HistoryRepositoryTests : IDisposable
         Assert.Empty(await ReadFinalTextsAsync(_paths));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\r\n")]
+    public async Task AddAsync_EmptyOrWhitespaceText_SkipsWrite(string text)
+    {
+        // Nothing said during dictation resolves to blank text; it must not clutter history.
+        await _repository.AddAsync(DateTime.UtcNow, text);
+
+        Assert.Empty(await ReadFinalTextsAsync(_paths));
+    }
+
     [Fact]
     public async Task AddAsync_HistoryReenabled_WritesAgain()
     {

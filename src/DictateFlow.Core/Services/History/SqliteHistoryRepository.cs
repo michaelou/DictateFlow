@@ -40,6 +40,14 @@ public sealed class SqliteHistoryRepository : IHistoryRepository
             return;
         }
 
+        // Nothing said (silence, or a transcript that resolved to whitespace) leaves no
+        // meaningful entry — don't clutter history with blanks.
+        if (string.IsNullOrWhiteSpace(finalText))
+        {
+            _logger.LogDebug("History entry is empty or whitespace-only; not persisted");
+            return;
+        }
+
         await using var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
 
         await using (var command = connection.CreateCommand())
