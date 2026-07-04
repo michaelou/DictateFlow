@@ -49,6 +49,7 @@ public sealed class SettingsValidator : ISettingsValidator
         ValidateHistory(settings.History, findings);
         ValidatePricing(settings.Pricing, findings);
         ValidatePromptModes(settings, findings);
+        ValidateVoiceCommands(settings.VoiceCommands, findings);
 
         return [.. findings.OrderBy(f => f.Severity)];
     }
@@ -241,6 +242,25 @@ public sealed class SettingsValidator : ISettingsValidator
             {
                 findings.Add(Warning("Rules", $"Rule for '{rule.ProcessName}' uses unknown prompt mode '{rule.PromptMode}'."));
             }
+        }
+    }
+
+    /// <summary>Voice command rules only matter while the feature is enabled; a disabled section stays silent.</summary>
+    private static void ValidateVoiceCommands(VoiceCommandSettings voiceCommands, List<SettingsValidationError> findings)
+    {
+        if (!voiceCommands.Enabled)
+        {
+            return;
+        }
+
+        if (voiceCommands.WakePhraseEnabled && string.IsNullOrWhiteSpace(voiceCommands.WakePhrase))
+        {
+            findings.Add(Error("Voice Commands", "A wake phrase is required while the wake phrase is enabled."));
+        }
+
+        if (voiceCommands.CommandTimeoutSeconds is < 1 or > 600)
+        {
+            findings.Add(Error("Voice Commands", "Command timeout must be between 1 and 600 seconds."));
         }
     }
 

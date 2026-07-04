@@ -4,6 +4,7 @@ using DictateFlow.App.Services.Output;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
@@ -24,6 +25,7 @@ using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App;
@@ -163,6 +165,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPromptModeStore, PromptModeStore>();
         services.AddSingleton<IPromptResolver, PromptResolver>();
         services.AddSingleton<IPromptModeSelector, PromptModeSelector>();
+
+        // Voice command framework (issue #26): the deterministic command branch of the
+        // pipeline. Action types register like providers — one AddCommandAction line each;
+        // the catalog is the fixed allowlist of what a command can execute. The confirmation
+        // default denies (fail closed); issue #30 replaces it with the dialog implementation
+        // via TryAdd.
+        services.AddSingleton<IWakePhraseDetector, WakePhraseDetector>();
+        services.AddSingleton<ICommandMatcher, CommandMatcher>();
+        services.AddSingleton<ICommandActionResolver, CommandActionResolver>();
+        services.AddSingleton<IVoiceCommandService, VoiceCommandService>();
+        services.TryAddSingleton<ICommandConfirmationService, DenyingCommandConfirmationService>();
+        services.AddSingleton<ICommandDefinitionSource, MockCommandDefinitionSource>();
+        services.AddCommandAction<MockCommandAction>(MockCommandAction.RegistrationName);
 
         // Output pipeline (M5): history write, the mode-aware confirmation gate, and the
         // orchestrator itself.

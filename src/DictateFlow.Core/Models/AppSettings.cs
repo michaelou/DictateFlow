@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Gets or sets the diagnostic logging configuration (consumed in M6).</summary>
     public LoggingSettings Logging { get; set; } = new();
 
+    /// <summary>Gets or sets the voice command framework configuration (consumed in issue #26).</summary>
+    public VoiceCommandSettings VoiceCommands { get; set; } = new();
+
     /// <summary>Gets or sets the name of the active prompt mode used for LLM enhancement (consumed in M4).</summary>
     public string ActivePromptMode { get; set; } = "Raw";
 
@@ -206,6 +209,43 @@ public sealed class PricingSettings
 
     /// <summary>Gets or sets the display currency code (e.g. <c>USD</c>); no conversion is performed.</summary>
     public string Currency { get; set; } = "USD";
+}
+
+/// <summary>
+/// Voice command framework settings. Read per utterance, so changes apply live. The feature
+/// ships disabled: with <see cref="Enabled"/> off the dictation pipeline never inspects the
+/// transcript for commands and behaves exactly as before.
+/// </summary>
+public sealed class VoiceCommandSettings
+{
+    /// <summary>Gets or sets a value indicating whether voice commands are detected and executed at all.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the wake phrase that marks an utterance as a command (e.g.
+    /// <c>Hey John</c>). Matched case-insensitively, ignoring punctuation, at the start of
+    /// the transcript.
+    /// </summary>
+    public string WakePhrase { get; set; } = "Hey John";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the wake phrase is required. When off, every
+    /// utterance is checked against the command phrases and non-matching utterances fall
+    /// through to normal dictation.
+    /// </summary>
+    public bool WakePhraseEnabled { get; set; } = true;
+
+    /// <summary>Gets or sets the number of seconds a command action may run before it is cancelled.</summary>
+    public int CommandTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every command requires confirmation before it
+    /// executes, regardless of the per-command <see cref="CommandDefinition.RequiresConfirmation"/>.
+    /// </summary>
+    public bool RequireConfirmation { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether command feedback sounds play (consumed by the app UI).</summary>
+    public bool EnableSounds { get; set; } = true;
 }
 
 /// <summary>Diagnostic logging settings.</summary>
