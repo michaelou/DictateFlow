@@ -19,8 +19,11 @@ using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Transfer;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Core.Services.Models;
+using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
+using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using Microsoft.Extensions.Logging;
 
@@ -48,13 +51,18 @@ public partial class LocalModelItem : ObservableObject
 {
     /// <summary>Initializes a row for one catalog component.</summary>
     /// <param name="definition">The component the row manages.</param>
-    public LocalModelItem(ModelDefinition definition)
+    /// <param name="manager">The model manager that installs and verifies the component.</param>
+    public LocalModelItem(ModelDefinition definition, IModelManager manager)
     {
         Definition = definition;
+        Manager = manager;
     }
 
     /// <summary>Gets the catalog definition behind this row.</summary>
     public ModelDefinition Definition { get; }
+
+    /// <summary>Gets the model manager the row's actions go through.</summary>
+    public IModelManager Manager { get; }
 
     /// <summary>Gets the name shown for the row.</summary>
     public string DisplayName => Definition.DisplayName;
@@ -117,6 +125,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly IDialogService _dialogService;
     private readonly WhisperCppModelManager _whisperModelManager;
+    private readonly ParakeetModelManager _parakeetModelManager;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isAutomaticOutput;
@@ -139,6 +148,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="diagnosticsService">Supplies versions, the log tail and the copyable report.</param>
     /// <param name="dialogService">File pickers and confirmation prompts.</param>
     /// <param name="whisperModelManager">Manages the local whisper.cpp engine and models (Local Models page).</param>
+    /// <param name="parakeetModelManager">Manages the local Parakeet model files (Local Models page).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public SettingsViewModel(
         ISettingsService settingsService,
@@ -155,6 +165,7 @@ public partial class SettingsViewModel : ObservableObject
         IDiagnosticsService diagnosticsService,
         IDialogService dialogService,
         WhisperCppModelManager whisperModelManager,
+        ParakeetModelManager parakeetModelManager,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
@@ -170,6 +181,7 @@ public partial class SettingsViewModel : ObservableObject
         _diagnosticsService = diagnosticsService;
         _dialogService = dialogService;
         _whisperModelManager = whisperModelManager;
+        _parakeetModelManager = parakeetModelManager;
         _logger = logger;
 
         var options = new List<MicrophoneOption> { new(null, "System default") };
@@ -219,7 +231,14 @@ public partial class SettingsViewModel : ObservableObject
         _whisperLanguage = whisper.Language;
         _whisperTimeoutSeconds = whisper.TimeoutSeconds;
 
-        LocalModels = [.. WhisperCppModelCatalog.All.Select(d => new LocalModelItem(d))];
+        var parakeet = _configReader.GetConfig<ParakeetTranscriptionConfig>(
+            ProviderKind.Transcription, ParakeetProviders.RegistrationName);
+        _parakeetTimeoutSeconds = parakeet.TimeoutSeconds;
+
+        LocalModels = [
+            .. WhisperCppModelCatalog.All.Select(d => new LocalModelItem(d, _whisperModelManager)),
+            .. ParakeetModelCatalog.All.Select(d => new LocalModelItem(d, _parakeetModelManager)),
+        ];
         RefreshLocalModelState();
 
         var llm = _configReader.GetConfig<AzureFoundryLlmConfig>(
@@ -230,6 +249,23 @@ public partial class SettingsViewModel : ObservableObject
         _llmTemperature = llm.Temperature;
         _llmMaxTokens = llm.MaxTokens;
         _llmTimeoutSeconds = llm.TimeoutSeconds;
+
+        var anthropic = _configReader.GetConfig<AnthropicLlmConfig>(
+            ProviderKind.Llm, AnthropicProviders.RegistrationName);
+        _anthropicApiKey = anthropic.ApiKey;
+        _anthropicModel = anthropic.Model;
+        _anthropicTemperature = anthropic.Temperature;
+        _anthropicMaxTokens = anthropic.MaxTokens;
+        _anthropicTimeoutSeconds = anthropic.TimeoutSeconds;
+
+        var ollama = _configReader.GetConfig<OllamaLlmConfig>(
+            ProviderKind.Llm, OllamaProviders.RegistrationName);
+        _ollamaBaseUrl = ollama.BaseUrl;
+        _ollamaApiKey = ollama.ApiKey;
+        _ollamaModel = ollama.Model;
+        _ollamaTemperature = ollama.Temperature;
+        _ollamaMaxTokens = ollama.MaxTokens;
+        _ollamaTimeoutSeconds = ollama.TimeoutSeconds;
 
         var mockLlm = _configReader.GetConfig<MockLlmConfig>(
             ProviderKind.Llm, MockLLMProvider.RegistrationName);
@@ -401,6 +437,22 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Gets or sets the local Parakeet transcription timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _parakeetTimeoutSeconds;
+
+    /// <summary>Gets the install-state summary for the Speech page's Parakeet section.</summary>
+    public string ParakeetStatusText
+        => _parakeetModelManager.IsFullyInstalled()
+            ? $"✓ {ParakeetModelCatalog.ModelDisplayName} is installed — transcription runs fully offline."
+            : "⬇ The Parakeet model is not installed yet. Download its files on the Local Models page.";
+
+    /// <summary>Gets the installed-model line shown on the Local Models page.</summary>
+    public string ParakeetEngineStatus
+        => _parakeetModelManager.IsFullyInstalled()
+            ? $"✓ {ParakeetModelCatalog.ModelDisplayName}"
+            : $"⬇ {ParakeetModelCatalog.ModelDisplayName} not installed";
+
     /// <summary>Gets the registered LLM provider names offered by the LLM dropdown.</summary>
     public IReadOnlyList<string> LlmProviders { get; }
 
@@ -435,6 +487,50 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the LLM request timeout in seconds.</summary>
     [ObservableProperty]
     private int _llmTimeoutSeconds;
+
+    /// <summary>Gets or sets the Anthropic API key.</summary>
+    [ObservableProperty]
+    private string _anthropicApiKey;
+
+    /// <summary>Gets or sets the Anthropic model id, e.g. <c>claude-opus-4-8</c>.</summary>
+    [ObservableProperty]
+    private string _anthropicModel;
+
+    /// <summary>Gets or sets the Anthropic default sampling temperature; modes can override it.</summary>
+    [ObservableProperty]
+    private double _anthropicTemperature;
+
+    /// <summary>Gets or sets the Anthropic maximum number of completion tokens per request.</summary>
+    [ObservableProperty]
+    private int _anthropicMaxTokens;
+
+    /// <summary>Gets or sets the Anthropic request timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _anthropicTimeoutSeconds;
+
+    /// <summary>Gets or sets the Ollama server base URL.</summary>
+    [ObservableProperty]
+    private string _ollamaBaseUrl;
+
+    /// <summary>Gets or sets the Ollama API key (empty for a local server).</summary>
+    [ObservableProperty]
+    private string _ollamaApiKey;
+
+    /// <summary>Gets or sets the Ollama model name, e.g. <c>llama3.2</c>.</summary>
+    [ObservableProperty]
+    private string _ollamaModel;
+
+    /// <summary>Gets or sets the Ollama default sampling temperature; modes can override it.</summary>
+    [ObservableProperty]
+    private double _ollamaTemperature;
+
+    /// <summary>Gets or sets the Ollama maximum number of completion tokens per request.</summary>
+    [ObservableProperty]
+    private int _ollamaMaxTokens;
+
+    /// <summary>Gets or sets the Ollama request timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _ollamaTimeoutSeconds;
 
     /// <summary>Gets or sets the inline result of the last LLM "Test connection" run, if any.</summary>
     [ObservableProperty]
@@ -815,23 +911,35 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Offers to install the missing local components as soon as Local Whisper.cpp is
-    /// picked in the Speech dropdown — the download itself runs on the Local Models page.
+    /// Offers to install the missing local components as soon as a local provider
+    /// (Whisper.cpp or Parakeet) is picked in the Speech dropdown — the download itself
+    /// runs on the Local Models page.
     /// </summary>
     /// <param name="value">The newly selected provider name.</param>
     partial void OnSelectedSpeechProviderChanged(string value)
     {
-        if (!string.Equals(value, WhisperCppProviders.RegistrationName, StringComparison.OrdinalIgnoreCase))
+        List<LocalModelItem> missing;
+        if (string.Equals(value, WhisperCppProviders.RegistrationName, StringComparison.OrdinalIgnoreCase))
+        {
+            OnPropertyChanged(nameof(WhisperStatusText));
+            var model = SelectedWhisperModel ?? WhisperCppModelCatalog.Small;
+            missing = LocalModels
+                .Where(i => !i.IsInstalled && !i.IsBusy && i.Manager == _whisperModelManager)
+                .Where(i => i.Definition.Kind == ModelComponentKind.Engine || i.Definition.Id == model.Id)
+                .ToList();
+        }
+        else if (string.Equals(value, ParakeetProviders.RegistrationName, StringComparison.OrdinalIgnoreCase))
+        {
+            OnPropertyChanged(nameof(ParakeetStatusText));
+            missing = LocalModels
+                .Where(i => !i.IsInstalled && !i.IsBusy && i.Manager == _parakeetModelManager)
+                .ToList();
+        }
+        else
         {
             return;
         }
 
-        OnPropertyChanged(nameof(WhisperStatusText));
-        var model = SelectedWhisperModel ?? WhisperCppModelCatalog.Small;
-        var missing = LocalModels
-            .Where(i => !i.IsInstalled && !i.IsBusy)
-            .Where(i => i.Definition.Kind == ModelComponentKind.Engine || i.Definition.Id == model.Id)
-            .ToList();
         if (missing.Count == 0)
         {
             return;
@@ -883,7 +991,7 @@ public partial class SettingsViewModel : ObservableObject
                 item.ProgressText =
                     $"{fraction * item.Definition.SizeBytes / (1024.0 * 1024.0):F0} MB / {item.SizeText}";
             });
-            await _whisperModelManager.DownloadAsync(item.Definition, progress, cancellation.Token);
+            await item.Manager.DownloadAsync(item.Definition, progress, cancellation.Token);
             item.ActionResult = "✓ Downloaded and verified.";
         }
         catch (OperationCanceledException)
@@ -929,7 +1037,7 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            await _whisperModelManager.DeleteAsync(item.Definition);
+            await item.Manager.DeleteAsync(item.Definition);
             item.ActionResult = null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -955,7 +1063,7 @@ public partial class SettingsViewModel : ObservableObject
         item.ActionResult = "Verifying…";
         try
         {
-            var ok = await _whisperModelManager.VerifyAsync(item.Definition, CancellationToken.None);
+            var ok = await item.Manager.VerifyAsync(item.Definition, CancellationToken.None);
             item.ActionResult = ok
                 ? "✓ Verification succeeded."
                 : "✗ Verification failed — delete and download the component again.";
@@ -976,11 +1084,13 @@ public partial class SettingsViewModel : ObservableObject
     {
         foreach (var item in LocalModels)
         {
-            item.IsInstalled = _whisperModelManager.IsInstalled(item.Definition);
+            item.IsInstalled = item.Manager.IsInstalled(item.Definition);
         }
 
         OnPropertyChanged(nameof(WhisperEngineStatus));
         OnPropertyChanged(nameof(WhisperStatusText));
+        OnPropertyChanged(nameof(ParakeetEngineStatus));
+        OnPropertyChanged(nameof(ParakeetStatusText));
     }
 
     /// <summary>
@@ -1501,6 +1611,11 @@ public partial class SettingsViewModel : ObservableObject
         whisper.Language = WhisperLanguage.Trim();
         whisper.TimeoutSeconds = WhisperTimeoutSeconds;
         _configReader.SetConfig(ProviderKind.Transcription, WhisperCppProviders.RegistrationName, whisper);
+
+        var parakeet = _configReader.GetConfig<ParakeetTranscriptionConfig>(
+            ProviderKind.Transcription, ParakeetProviders.RegistrationName);
+        parakeet.TimeoutSeconds = ParakeetTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Transcription, ParakeetProviders.RegistrationName, parakeet);
     }
 
     /// <summary>
@@ -1519,6 +1634,27 @@ public partial class SettingsViewModel : ObservableObject
                 MaxTokens = LlmMaxTokens,
                 TimeoutSeconds = LlmTimeoutSeconds,
             });
+        // Read-modify-write keeps config-only fields (e.g. Endpoint) that have no UI.
+        var anthropic = _configReader.GetConfig<AnthropicLlmConfig>(
+            ProviderKind.Llm, AnthropicProviders.RegistrationName);
+        anthropic.ApiKey = AnthropicApiKey.Trim();
+        anthropic.Model = AnthropicModel.Trim();
+        anthropic.Temperature = AnthropicTemperature;
+        anthropic.MaxTokens = AnthropicMaxTokens;
+        anthropic.TimeoutSeconds = AnthropicTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Llm, AnthropicProviders.RegistrationName, anthropic);
+
+        _configReader.SetConfig(ProviderKind.Llm, OllamaProviders.RegistrationName,
+            new OllamaLlmConfig
+            {
+                BaseUrl = OllamaBaseUrl.Trim(),
+                ApiKey = OllamaApiKey.Trim(),
+                Model = OllamaModel.Trim(),
+                Temperature = OllamaTemperature,
+                MaxTokens = OllamaMaxTokens,
+                TimeoutSeconds = OllamaTimeoutSeconds,
+            });
+
         _configReader.SetConfig(ProviderKind.Llm, MockLLMProvider.RegistrationName,
             new MockLlmConfig { DelayMs = MockLlmDelayMs });
     }
