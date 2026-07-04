@@ -57,7 +57,42 @@ public sealed class DatabaseInitializerTests : IDisposable
         await _initializer.InitializeAsync();
 
         var columns = await GetColumnNamesAsync("History");
-        Assert.Equal(["Id", "TimestampUtc", "FinalText"], columns);
+        Assert.Equal(["Id", "TimestampUtc", "FinalText", "RawTranscript", "PromptModeName"], columns);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_MigratesLegacyHistoryTableWithoutTheNewColumns()
+    {
+        // Seed a pre-existing database shaped like an older release: no RawTranscript /
+        // PromptModeName columns, and a row already present.
+        await using (var connection = new SqliteConnection($"Data Source={_paths.DatabaseFilePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                CREATE TABLE History (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    TimestampUtc TEXT NOT NULL,
+                    FinalText TEXT NOT NULL
+                );
+                INSERT INTO History (TimestampUtc, FinalText) VALUES ('2020-01-01T00:00:00.0000000Z', 'legacy');
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        SqliteConnection.ClearAllPools();
+
+        await _initializer.InitializeAsync();
+
+        var columns = await GetColumnNamesAsync("History");
+        Assert.Equal(["Id", "TimestampUtc", "FinalText", "RawTranscript", "PromptModeName"], columns);
+
+        // The migration must preserve the existing row (ALTER TABLE ADD COLUMN, not a rebuild).
+        await using var verify = new SqliteConnection($"Data Source={_paths.DatabaseFilePath}");
+        await verify.OpenAsync();
+        await using var count = verify.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM History WHERE FinalText = 'legacy';";
+        Assert.Equal(1L, Convert.ToInt64(await count.ExecuteScalarAsync()));
     }
 
     [Fact]

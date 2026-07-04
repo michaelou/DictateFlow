@@ -16,8 +16,8 @@ public sealed class HistoryEntryItem
     {
         Entry = entry;
         TimestampText = entry.TimestampUtc.ToLocalTime().ToString("g");
-        var singleLine = entry.FinalText.ReplaceLineEndings(" ").Trim();
-        Preview = singleLine.Length <= 120 ? singleLine : $"{singleLine[..120].TrimEnd()}…";
+        Preview = SingleLinePreview(entry.FinalText);
+        RawPreview = SingleLinePreview(entry.RawTranscript);
     }
 
     /// <summary>Gets the underlying stored entry.</summary>
@@ -26,11 +26,35 @@ public sealed class HistoryEntryItem
     /// <summary>Gets the delivery time formatted in local time.</summary>
     public string TimestampText { get; }
 
-    /// <summary>Gets the single-line text preview shown in the list.</summary>
+    /// <summary>Gets the single-line final-text preview shown in the list.</summary>
     public string Preview { get; }
+
+    /// <summary>Gets the single-line raw-transcript preview shown in the list.</summary>
+    public string RawPreview { get; }
 
     /// <summary>Gets the full final text (shown in the detail pane and copied by Copy).</summary>
     public string FullText => Entry.FinalText;
+
+    /// <summary>Gets the full raw transcript, or an empty string when it was not captured.</summary>
+    public string RawText => Entry.RawTranscript ?? "";
+
+    /// <summary>Gets a value indicating whether a raw transcript was captured for this entry.</summary>
+    public bool HasRawText => !string.IsNullOrEmpty(Entry.RawTranscript);
+
+    /// <summary>Gets the prompt mode that produced the final text, or a dash when it was not captured.</summary>
+    public string ModeName => string.IsNullOrEmpty(Entry.PromptModeName) ? "—" : Entry.PromptModeName;
+
+    /// <summary>Collapses text to a single trimmed line, ellipsized past 120 characters.</summary>
+    private static string SingleLinePreview(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return "";
+        }
+
+        var singleLine = text.ReplaceLineEndings(" ").Trim();
+        return singleLine.Length <= 120 ? singleLine : $"{singleLine[..120].TrimEnd()}…";
+    }
 }
 
 /// <summary>

@@ -146,7 +146,8 @@ public sealed class DictationPipeline : IDictationPipeline
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            await _historyRepository.AddAsync(_timeProvider.GetUtcNow().UtcDateTime, confirmedText, cancellationToken)
+            await _historyRepository.AddAsync(
+                    _timeProvider.GetUtcNow().UtcDateTime, confirmedText, transcript, timings.ModeName, cancellationToken)
                 .ConfigureAwait(false);
             timings.HistoryMs = stopwatch.ElapsedMilliseconds;
             _logger.LogDebug("History step completed in {ElapsedMs} ms", timings.HistoryMs);

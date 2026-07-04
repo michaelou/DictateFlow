@@ -32,7 +32,12 @@ public sealed class SqliteHistoryRepository : IHistoryRepository
     }
 
     /// <inheritdoc />
-    public async Task AddAsync(DateTime timestampUtc, string finalText, CancellationToken cancellationToken = default)
+    public async Task AddAsync(
+        DateTime timestampUtc,
+        string finalText,
+        string? rawTranscript = null,
+        string? promptModeName = null,
+        CancellationToken cancellationToken = default)
     {
         if (!_settingsService.Current.History.Enabled)
         {
@@ -52,10 +57,14 @@ public sealed class SqliteHistoryRepository : IHistoryRepository
 
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "INSERT INTO History (TimestampUtc, FinalText) VALUES ($timestamp, $text);";
+            command.CommandText =
+                "INSERT INTO History (TimestampUtc, FinalText, RawTranscript, PromptModeName) "
+                + "VALUES ($timestamp, $text, $raw, $mode);";
             command.Parameters.AddWithValue("$timestamp",
                 DateTime.SpecifyKind(timestampUtc, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture));
             command.Parameters.AddWithValue("$text", finalText);
+            command.Parameters.AddWithValue("$raw", (object?)rawTranscript ?? DBNull.Value);
+            command.Parameters.AddWithValue("$mode", (object?)promptModeName ?? DBNull.Value);
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -89,14 +98,15 @@ public sealed class SqliteHistoryRepository : IHistoryRepository
         if (string.IsNullOrWhiteSpace(query))
         {
             command.CommandText =
-                "SELECT Id, TimestampUtc, FinalText FROM History ORDER BY Id DESC LIMIT $limit;";
+                "SELECT Id, TimestampUtc, FinalText, RawTranscript, PromptModeName "
+                + "FROM History ORDER BY Id DESC LIMIT $limit;";
         }
         else
         {
             command.CommandText =
                 """
-                SELECT Id, TimestampUtc, FinalText FROM History
-                WHERE FinalText LIKE $pattern ESCAPE '\'
+                SELECT Id, TimestampUtc, FinalText, RawTranscript, PromptModeName FROM History
+                WHERE FinalText LIKE $pattern ESCAPE '\' OR RawTranscript LIKE $pattern ESCAPE '\'
                 ORDER BY Id DESC LIMIT $limit;
                 """;
             command.Parameters.AddWithValue("$pattern", $"%{EscapeLikePattern(query.Trim())}%");
@@ -112,7 +122,9 @@ public sealed class SqliteHistoryRepository : IHistoryRepository
                 reader.GetInt64(0),
                 DateTime.Parse(reader.GetString(1), CultureInfo.InvariantCulture,
                     DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
-                reader.GetString(2)));
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
         }
 
         _logger.LogDebug("History search returned {Count} entries (query: {HasQuery})",

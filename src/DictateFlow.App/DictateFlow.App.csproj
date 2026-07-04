@@ -8,10 +8,10 @@
     <!-- Ships as DictateFlow.exe (not DictateFlow.App.exe) so shortcuts and the installer read cleanly. -->
     <AssemblyName>DictateFlow</AssemblyName>
     <Product>DictateFlow</Product>
-    <Company>Belugga</Company>
-    <Authors>Belugga</Authors>
+    <Company>Andreas Michaelou</Company>
+    <Authors>Andreas Michaelou</Authors>
     <!-- Default dev version; scripts/release.ps1 overrides it with -p:Version=<release version>. -->
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <!-- Keep the informational version equal to <Version> (no +commit-hash suffix) so the
          version shown in Settings › Diagnostics and used by the update check is clean. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

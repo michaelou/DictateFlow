@@ -48,6 +48,37 @@ public sealed class HistoryRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task AddAsync_PersistsRawTranscriptAndPromptMode()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "Final text.", "raw text", "Email");
+
+        var entry = Assert.Single(await _repository.SearchAsync(null, limit: 100));
+        Assert.Equal("Final text.", entry.FinalText);
+        Assert.Equal("raw text", entry.RawTranscript);
+        Assert.Equal("Email", entry.PromptModeName);
+    }
+
+    [Fact]
+    public async Task AddAsync_OmittedRawTranscriptAndMode_StoredAsNull()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "Final only.");
+
+        var entry = Assert.Single(await _repository.SearchAsync(null, limit: 100));
+        Assert.Null(entry.RawTranscript);
+        Assert.Null(entry.PromptModeName);
+    }
+
+    [Fact]
+    public async Task SearchAsync_Query_AlsoMatchesTheRawTranscript()
+    {
+        await _repository.AddAsync(DateTime.UtcNow, "Polished output.", "umm the raw mumbling", "Email");
+
+        var entries = await _repository.SearchAsync("mumbling", limit: 100);
+
+        Assert.Equal(["Polished output."], entries.Select(e => e.FinalText));
+    }
+
+    [Fact]
     public async Task AddAsync_MultipleEntries_AllPersisted()
     {
         await _repository.AddAsync(DateTime.UtcNow, "first");

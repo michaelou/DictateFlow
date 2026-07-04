@@ -8,6 +8,9 @@
         MinWidth="480"
         MinHeight="320"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -73,28 +76,90 @@
                             </Button>
                         </StackPanel>
                         <StackPanel>
-                            <TextBlock FontSize="11"
-                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                       Text="{Binding TimestampText}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           Text="{Binding TimestampText}" />
+                                <Border Margin="8,0,0,0"
+                                        Padding="5,0"
+                                        VerticalAlignment="Center"
+                                        Background="{StaticResource SecondaryTextBrush}"
+                                        CornerRadius="3"
+                                        Opacity="0.85">
+                                    <TextBlock FontSize="10"
+                                               Foreground="{DynamicResource WindowBackgroundBrush}"
+                                               Text="{Binding ModeName}" />
+                                </Border>
+                            </StackPanel>
                             <TextBlock Text="{Binding Preview}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Margin="0,1,0,0"
+                                       FontSize="11"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasRawText, Converter={StaticResource BoolToVisibility}}">
+                                <Run Text="raw:" />
+                                <Run Text="{Binding RawPreview, Mode=OneWay}" />
+                            </TextBlock>
                         </StackPanel>
                     </DockPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <!-- Detail pane: full text of the selected entry -->
+        <!-- Detail pane: final text next to the raw transcript, plus the prompt mode -->
         <Expander Grid.Row="2"
                   Margin="0,8,0,0"
-                  Header="Full text"
+                  Header="Detail"
                   IsExpanded="True">
-            <TextBox Height="90"
-                     Margin="0,4,0,0"
-                     AcceptsReturn="True"
-                     IsReadOnly="True"
-                     Text="{Binding SelectedEntry.FullText, Mode=OneWay}"
-                     TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto" />
+            <Grid Margin="0,4,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Grid.ColumnSpan="3"
+                           Margin="0,0,0,4"
+                           Foreground="{StaticResource SecondaryTextBrush}">
+                    <Run Text="Prompt mode:" />
+                    <Run FontWeight="SemiBold" Text="{Binding SelectedEntry.ModeName, Mode=OneWay}" />
+                </TextBlock>
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           FontSize="11"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           Text="Final text" />
+                <TextBlock Grid.Row="1"
+                           Grid.Column="2"
+                           FontSize="11"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           Text="Raw transcript" />
+
+                <TextBox Grid.Row="2"
+                         Grid.Column="0"
+                         Height="90"
+                         AcceptsReturn="True"
+                         IsReadOnly="True"
+                         Text="{Binding SelectedEntry.FullText, Mode=OneWay}"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="2"
+                         Height="90"
+                         AcceptsReturn="True"
+                         IsReadOnly="True"
+                         Text="{Binding SelectedEntry.RawText, Mode=OneWay}"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" />
+            </Grid>
         </Expander>
 
         <TextBlock Grid.Row="3"

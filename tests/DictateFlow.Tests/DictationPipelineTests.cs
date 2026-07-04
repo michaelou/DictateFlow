@@ -46,7 +46,7 @@ public sealed class DictationPipelineTests
         _llm.Setup(l => l.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()))
             .Callback(() => _callOrder.Add("llm"))
             .ReturnsAsync((PromptContext context, CancellationToken _) => "[enhanced] " + context.Transcript);
-        _history.Setup(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _history.Setup(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .Callback(() => _callOrder.Add("history"))
             .Returns(Task.CompletedTask);
         _output.SetupGet(o => o.Name).Returns("TestOutput");
@@ -109,7 +109,8 @@ public sealed class DictationPipelineTests
     {
         await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
 
-        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), "[enhanced] raw transcript", It.IsAny<CancellationToken>()), Times.Once);
+        _history.Verify(h => h.AddAsync(
+            It.IsAny<DateTime>(), "[enhanced] raw transcript", "raw transcript", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
         _output.Verify(o => o.OutputAsync("[enhanced] raw transcript"), Times.Once);
     }
 
@@ -205,7 +206,7 @@ public sealed class DictationPipelineTests
         Assert.Contains("bad key", result.ErrorMessage);
         Assert.Contains("settings", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
         _gate.Verify(g => g.ConfirmAsync(It.IsAny<PipelineResult>()), Times.Never);
-        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -267,7 +268,7 @@ public sealed class DictationPipelineTests
         Assert.True(result.Success);
         Assert.Null(result.FinalText);
         Assert.Null(result.ErrorMessage);
-        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         _output.Verify(o => o.OutputAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -279,7 +280,8 @@ public sealed class DictationPipelineTests
         var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
 
         Assert.Equal("edited text", result.FinalText);
-        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), "edited text", It.IsAny<CancellationToken>()), Times.Once);
+        _history.Verify(h => h.AddAsync(
+            It.IsAny<DateTime>(), "edited text", "raw transcript", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
         _output.Verify(o => o.OutputAsync("edited text"), Times.Once);
     }
 
@@ -301,7 +303,7 @@ public sealed class DictationPipelineTests
     [Fact]
     public async Task RunAsync_HistoryThrows_OutputStillDelivered()
     {
-        _history.Setup(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _history.Setup(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("disk full"));
 
         var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
@@ -321,7 +323,7 @@ public sealed class DictationPipelineTests
         Assert.False(result.Success);
         Assert.Equal("[enhanced] raw transcript", result.FinalText); // the text is not lost
         Assert.Contains("clipboard locked", result.ErrorMessage);
-        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _history.Verify(h => h.AddAsync(It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
