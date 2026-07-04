@@ -25,10 +25,11 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     }
 
     /// <inheritdoc />
-    public void ShowListening() => OnUiThread(() =>
+    public void ShowListening(string promptMode) => OnUiThread(() =>
     {
         _viewModel.Level = 0f;
         _viewModel.PartialTranscript = "";
+        _viewModel.PromptMode = promptMode;
         ShowState(OverlayState.Listening);
     });
 

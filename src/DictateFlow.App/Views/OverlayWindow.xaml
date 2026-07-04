@@ -17,6 +17,35 @@
             CornerRadius="10"
             IsHitTestVisible="False">
         <StackPanel Orientation="Vertical">
+            <!-- Prompt mode selected for this dictation, shown above the status line. -->
+            <TextBlock FontSize="11"
+                       Foreground="#FF7FB8FF"
+                       MaxWidth="420"
+                       Margin="0,0,0,3"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding PromptMode, Mode=OneWay}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasPromptMode}" Value="True" />
+                                    <Condition Binding="{Binding State}" Value="{x:Static models:OverlayState.Listening}" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasPromptMode}" Value="True" />
+                                    <Condition Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <StackPanel Orientation="Horizontal">
                 <TextBlock FontSize="14"
                            Foreground="White"

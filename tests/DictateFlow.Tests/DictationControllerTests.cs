@@ -2,6 +2,7 @@ using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Pipeline;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -22,6 +23,7 @@ public sealed class DictationControllerTests
     private readonly Mock<IDictationPipeline> _pipeline = new();
     private readonly Mock<IStreamingTranscriptionCoordinator> _streaming = new();
     private readonly Mock<IForegroundAppService> _foregroundApp = new();
+    private readonly Mock<IPromptModeSelector> _modeSelector = new();
     private readonly Mock<ISettingsService> _settings = new();
     private readonly TestTimeProvider _time = new();
     private readonly AppSettings _appSettings = new();
@@ -36,13 +38,14 @@ public sealed class DictationControllerTests
         _streaming.Setup(s => s.TryBegin()).Returns((IStreamingTranscriptionSession?)null);
         _foregroundApp.SetupGet(f => f.LastCaptured).Returns("notepad");
         _foregroundApp.SetupGet(f => f.LastCapturedWindowHandle).Returns(1234);
+        _modeSelector.Setup(s => s.SelectMode(It.IsAny<string>())).Returns("Raw");
         _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PipelineResult(true, "final text", "raw transcript", null));
     }
 
     private DictationController CreateController()
         => new(_recorder.Object, _hotkeys.Object, _overlay.Object, _pipeline.Object, _streaming.Object,
-            _foregroundApp.Object, _settings.Object, _time, Mock.Of<ILogger<DictationController>>());
+            _foregroundApp.Object, _modeSelector.Object, _settings.Object, _time, Mock.Of<ILogger<DictationController>>());
 
     /// <summary>Makes the coordinator hand out a streaming session that completes with <paramref name="finalTranscript"/>.</summary>
     private Mock<IStreamingTranscriptionSession> SetupStreamingSession(string? finalTranscript)
@@ -66,7 +69,7 @@ public sealed class DictationControllerTests
 
         Assert.True(controller.IsRecording);
         _recorder.Verify(r => r.StartAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _overlay.Verify(o => o.ShowListening(), Times.Once);
+        _overlay.Verify(o => o.ShowListening(It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -517,6 +520,6 @@ public sealed class DictationControllerTests
         await controller.StartRecordingAsync();
 
         Assert.True(controller.IsRecording);
-        _overlay.Verify(o => o.ShowListening(), Times.Once);
+        _overlay.Verify(o => o.ShowListening(It.IsAny<string>()), Times.Once);
     }
 }

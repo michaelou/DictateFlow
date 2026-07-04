@@ -7,7 +7,11 @@ namespace DictateFlow.Core.Services.Audio;
 public interface IRecordingOverlay
 {
     /// <summary>Shows the overlay in the Listening state.</summary>
-    void ShowListening();
+    /// <param name="promptMode">
+    /// The name of the prompt mode selected for this dictation, shown above the status line;
+    /// an empty string hides the mode line.
+    /// </param>
+    void ShowListening(string promptMode);
 
     /// <summary>Updates the live input level indicator (0..1).</summary>
     /// <param name="level">Normalized peak level of the latest audio buffer.</param>

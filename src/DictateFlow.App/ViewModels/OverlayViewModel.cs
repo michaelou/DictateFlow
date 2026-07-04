@@ -22,6 +22,17 @@ public partial class OverlayViewModel : ObservableObject
     private float _level;
 
     /// <summary>
+    /// Gets or sets the name of the prompt mode selected for the current dictation, shown above
+    /// the status line while listening and processing; empty when there is no mode to show.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPromptMode))]
+    private string _promptMode = "";
+
+    /// <summary>Gets a value indicating whether there is a prompt mode to show.</summary>
+    public bool HasPromptMode => PromptMode.Length > 0;
+
+    /// <summary>
     /// Gets or sets the partial transcript received from streaming transcription; empty when
     /// streaming is not active.
     /// </summary>

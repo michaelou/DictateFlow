@@ -1,5 +1,6 @@
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Pipeline;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 
@@ -39,6 +40,7 @@ public sealed class DictationController : IDictationController, IDisposable
     private readonly IDictationPipeline _pipeline;
     private readonly IStreamingTranscriptionCoordinator _streamingCoordinator;
     private readonly IForegroundAppService _foregroundAppService;
+    private readonly IPromptModeSelector _promptModeSelector;
     private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DictationController> _logger;
@@ -55,6 +57,7 @@ public sealed class DictationController : IDictationController, IDisposable
     /// <param name="pipeline">Runs each completed capture through transcription, enhancement, history and output.</param>
     /// <param name="streamingCoordinator">Starts streaming transcription when enabled and supported by the active provider.</param>
     /// <param name="foregroundAppService">Captures the target application at record-start.</param>
+    /// <param name="promptModeSelector">Resolves the prompt mode shown on the overlay while recording.</param>
     /// <param name="settingsService">Supplies recording mode, hotkey and silence timeout.</param>
     /// <param name="timeProvider">Measures silence duration (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
@@ -65,6 +68,7 @@ public sealed class DictationController : IDictationController, IDisposable
         IDictationPipeline pipeline,
         IStreamingTranscriptionCoordinator streamingCoordinator,
         IForegroundAppService foregroundAppService,
+        IPromptModeSelector promptModeSelector,
         ISettingsService settingsService,
         TimeProvider timeProvider,
         ILogger<DictationController> logger)
@@ -75,6 +79,7 @@ public sealed class DictationController : IDictationController, IDisposable
         _pipeline = pipeline;
         _streamingCoordinator = streamingCoordinator;
         _foregroundAppService = foregroundAppService;
+        _promptModeSelector = promptModeSelector;
         _settingsService = settingsService;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -124,11 +129,15 @@ public sealed class DictationController : IDictationController, IDisposable
         // pipeline uses the name for {{ApplicationName}} and the handle to re-focus for output.
         _foregroundAppService.Capture();
 
+        // Resolve the same mode the pipeline will apply (both key off the captured app name),
+        // so the overlay can show it up front while recording.
+        var promptMode = _promptModeSelector.SelectMode(_foregroundAppService.LastCaptured);
+
         try
         {
             await _recorder.StartAsync(CancellationToken.None).ConfigureAwait(false);
             BeginStreamingSession();
-            _overlay.ShowListening();
+            _overlay.ShowListening(promptMode);
             _logger.LogInformation("Recording started");
         }
         catch (Exception ex)
