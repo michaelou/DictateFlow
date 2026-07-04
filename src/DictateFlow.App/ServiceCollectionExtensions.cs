@@ -74,6 +74,15 @@ public static class ServiceCollectionExtensions
             client.DefaultRequestHeaders.UserAgent.ParseAdd("DictateFlow-UpdateCheck");
         });
 
+        // Downloads the installer when the user chooses "Download & install". The self-contained
+        // installer is large, so this client has no overall timeout — progress and cancellation
+        // come from the download itself, not a stopwatch.
+        services.AddHttpClient<IUpdateDownloader, UpdateDownloader>(client =>
+        {
+            client.Timeout = Timeout.InfiniteTimeSpan;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("DictateFlow-UpdateCheck");
+        });
+
         services.AddSingleton<IWindowService, WindowService>();
         services.AddSingleton<IShutdownService, ShutdownService>();
         services.AddSingleton<ITrayIconService, TrayIconService>();

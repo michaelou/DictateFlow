@@ -92,8 +92,19 @@ iscc /DMyAppVersion=0.1.0 /DPublishDir="..\artifacts\publish\win-x64" /DOutputDi
 Right-click the tray icon → **Check for Updates…**. DictateFlow queries the latest GitHub
 release for `michaelou/DictateFlow`, compares its tag with the installed version, and:
 
-- if a newer version exists, shows a dialog with the current version, the latest version,
-  the release notes, and a button that opens the GitHub release page;
+- if a newer version exists, shows a dialog with the current version, the latest version and
+  the release notes. When the release publishes an installer asset
+  (`DictateFlowSetup-v<version>.exe`), the dialog offers **Download & install**: DictateFlow
+  downloads the installer (with a progress bar), launches the setup wizard, and closes so the
+  wizard can replace the running files. There is also an **Open release page** button to
+  download manually (used as a fallback and for portable installs);
 - otherwise reports that you're up to date;
-- if the network is unavailable, reports the failure gracefully — it never downloads or
-  installs anything automatically.
+- if the network is unavailable, reports the failure gracefully.
+
+The update check itself never runs automatically — it happens only when you click
+**Check for Updates…**, and nothing is downloaded until you click **Download & install**.
+
+The in-app installer relies on the release asset being named `DictateFlowSetup-v*.exe`, which
+`scripts/release.ps1` produces by default. The installer sets `CloseApplications=yes` so it can
+replace a still-running instance and relaunches DictateFlow as the normal (non-elevated) user
+when it finishes.

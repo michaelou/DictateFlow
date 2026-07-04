@@ -11,7 +11,7 @@
     <Company>Andreas Michaelou</Company>
     <Authors>Andreas Michaelou</Authors>
     <!-- Default dev version; scripts/release.ps1 overrides it with -p:Version=<release version>. -->
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <!-- Keep the informational version equal to <Version> (no +commit-hash suffix) so the
          version shown in Settings › Diagnostics and used by the update check is clean. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

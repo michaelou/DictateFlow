@@ -35,11 +35,26 @@ public sealed record UpdateCheckResult
     /// <summary>The URL of the latest release page, when available.</summary>
     public string? ReleaseUrl { get; init; }
 
+    /// <summary>
+    /// The direct download URL of the installer asset (<c>DictateFlowSetup-v*.exe</c>) for the
+    /// latest release, when the release publishes one. <see langword="null"/> means the app can
+    /// only link to the release page (e.g. a release with no installer asset, or a portable
+    /// install). Enables the in-app "Download &amp; install" action.
+    /// </summary>
+    public string? InstallerUrl { get; init; }
+
+    /// <summary>The installer asset's size in bytes, used for download progress and to verify
+    /// the download completed; <c>0</c> when <see cref="InstallerUrl"/> is <see langword="null"/>.</summary>
+    public long InstallerSize { get; init; }
+
     /// <summary>A human-readable message describing a failure; <see langword="null"/> on success.</summary>
     public string? Message { get; init; }
 
     /// <summary>Whether a newer release is available.</summary>
     public bool IsUpdateAvailable => Status == UpdateCheckStatus.UpdateAvailable;
+
+    /// <summary>Whether the latest release exposes an installer asset the app can download.</summary>
+    public bool HasInstaller => IsUpdateAvailable && !string.IsNullOrWhiteSpace(InstallerUrl);
 
     /// <summary>Creates an "up to date" result.</summary>
     public static UpdateCheckResult UpToDate(string currentVersion, string? latestVersion) => new()
@@ -50,13 +65,21 @@ public sealed record UpdateCheckResult
     };
 
     /// <summary>Creates an "update available" result.</summary>
-    public static UpdateCheckResult Available(string currentVersion, string latestVersion, string? releaseNotes, string? releaseUrl) => new()
+    public static UpdateCheckResult Available(
+        string currentVersion,
+        string latestVersion,
+        string? releaseNotes,
+        string? releaseUrl,
+        string? installerUrl = null,
+        long installerSize = 0) => new()
     {
         Status = UpdateCheckStatus.UpdateAvailable,
         CurrentVersion = currentVersion,
         LatestVersion = latestVersion,
         ReleaseNotes = releaseNotes,
         ReleaseUrl = releaseUrl,
+        InstallerUrl = installerUrl,
+        InstallerSize = installerSize,
     };
 
     /// <summary>Creates a "failed" result carrying a user-facing <paramref name="message"/>.</summary>

@@ -93,7 +93,11 @@ public sealed class WindowService : IWindowService
         // A fresh result supersedes any dialog already open, so close and rebuild it.
         _updateWindow?.Close();
 
-        var viewModel = new UpdateViewModel(result, _serviceProvider.GetService<ILogger<UpdateViewModel>>());
+        var viewModel = new UpdateViewModel(
+            result,
+            _serviceProvider.GetService<IUpdateDownloader>(),
+            _serviceProvider.GetService<IShutdownService>(),
+            _serviceProvider.GetService<ILogger<UpdateViewModel>>());
         var window = new UpdateWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
         window.Closed += (_, _) => _updateWindow = null;

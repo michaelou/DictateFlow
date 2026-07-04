@@ -56,6 +56,12 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; %LocalAppData%\Programs) from the wizard or command line if they prefer.
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog commandline
+; Support in-app updates: when DictateFlow launches this installer to update itself it closes
+; first, but CloseApplications lets the restart manager close any instance that is still
+; holding files. RestartApplications is off because we relaunch via the [Run] entry below
+; (as the original, non-elevated user) rather than through the restart manager.
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -72,4 +78,6 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; runasoriginaluser: after an elevated (in-app) update the app relaunches as the normal user,
+; not as administrator.
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser

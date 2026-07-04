@@ -26,7 +26,35 @@ public sealed class GitHubUpdateServiceTests
           "tag_name": "v0.2.0",
           "html_url": "https://github.com/michaelou/DictateFlow/releases/tag/v0.2.0",
           "body": "- Faster startup\n- Bug fixes",
-          "prerelease": false
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "DictateFlowPortable-v0.2.0.zip",
+              "browser_download_url": "https://github.com/michaelou/DictateFlow/releases/download/v0.2.0/DictateFlowPortable-v0.2.0.zip",
+              "size": 123
+            },
+            {
+              "name": "DictateFlowSetup-v0.2.0.exe",
+              "browser_download_url": "https://github.com/michaelou/DictateFlow/releases/download/v0.2.0/DictateFlowSetup-v0.2.0.exe",
+              "size": 456789
+            }
+          ]
+        }
+        """;
+
+    private const string ReleaseJsonNoInstaller = """
+        {
+          "tag_name": "v0.2.0",
+          "html_url": "https://github.com/michaelou/DictateFlow/releases/tag/v0.2.0",
+          "body": "- Faster startup",
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "DictateFlowPortable-v0.2.0.zip",
+              "browser_download_url": "https://github.com/michaelou/DictateFlow/releases/download/v0.2.0/DictateFlowPortable-v0.2.0.zip",
+              "size": 123
+            }
+          ]
         }
         """;
 
@@ -44,6 +72,35 @@ public sealed class GitHubUpdateServiceTests
         Assert.Equal("0.2.0", result.LatestVersion);
         Assert.Equal("https://github.com/michaelou/DictateFlow/releases/tag/v0.2.0", result.ReleaseUrl);
         Assert.Contains("Faster startup", result.ReleaseNotes);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_NewerReleaseWithInstallerAsset_ExposesInstaller()
+    {
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, ReleaseJson);
+        var service = CreateService(handler, "0.1.0");
+
+        var result = await service.CheckForUpdatesAsync();
+
+        Assert.True(result.HasInstaller);
+        Assert.Equal(
+            "https://github.com/michaelou/DictateFlow/releases/download/v0.2.0/DictateFlowSetup-v0.2.0.exe",
+            result.InstallerUrl);
+        Assert.Equal(456789, result.InstallerSize);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_NewerReleaseWithoutInstallerAsset_ReportsUpdateButNoInstaller()
+    {
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, ReleaseJsonNoInstaller);
+        var service = CreateService(handler, "0.1.0");
+
+        var result = await service.CheckForUpdatesAsync();
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.False(result.HasInstaller);
+        Assert.Null(result.InstallerUrl);
+        Assert.Equal(0, result.InstallerSize);
     }
 
     [Fact]

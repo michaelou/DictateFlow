@@ -59,19 +59,37 @@
             </ScrollViewer>
         </Border>
 
-        <StackPanel Grid.Row="5"
-                    Margin="0,12,0,0"
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal">
-            <Button Width="150"
-                    Margin="0,0,8,0"
-                    Content="Open release page"
-                    Command="{Binding OpenReleasePageCommand}"
-                    Visibility="{Binding HasReleaseUrl, Converter={StaticResource BoolToVis}}" />
-            <Button Width="88"
-                    Content="Close"
-                    IsCancel="True"
-                    Command="{Binding CloseCommand}" />
+        <StackPanel Grid.Row="5" Margin="0,12,0,0">
+            <StackPanel Margin="0,0,0,8"
+                        Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
+                <ProgressBar Height="6"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding DownloadProgress}" />
+            </StackPanel>
+
+            <TextBlock Margin="0,0,0,8"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasDownloadStatus, Converter={StaticResource BoolToVis}}"
+                       Text="{Binding DownloadStatus}" />
+
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button Width="170"
+                        Margin="0,0,8,0"
+                        Content="Download &amp; install"
+                        Command="{Binding DownloadAndInstallCommand}"
+                        Visibility="{Binding CanDownloadInstall, Converter={StaticResource BoolToVis}}" />
+                <Button Width="150"
+                        Margin="0,0,8,0"
+                        Content="Open release page"
+                        Command="{Binding OpenReleasePageCommand}"
+                        Visibility="{Binding HasReleaseUrl, Converter={StaticResource BoolToVis}}" />
+                <Button Width="88"
+                        Content="Close"
+                        IsCancel="True"
+                        Command="{Binding CloseCommand}" />
+            </StackPanel>
         </StackPanel>
     </Grid>
 </Window>

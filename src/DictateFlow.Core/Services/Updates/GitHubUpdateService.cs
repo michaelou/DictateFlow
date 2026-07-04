@@ -65,8 +65,19 @@ public sealed class GitHubUpdateService : IUpdateService
             var latestDisplay = release.TagName.TrimStart('v', 'V');
             if (ReleaseVersion.IsNewer(release.TagName, current))
             {
-                _logger.LogInformation("Update available: {Latest} (installed {Current})", latestDisplay, current);
-                return UpdateCheckResult.Available(current, latestDisplay, release.Body, release.HtmlUrl);
+                var installer = SelectInstallerAsset(release.Assets);
+                _logger.LogInformation(
+                    "Update available: {Latest} (installed {Current}); installer asset {Installer}",
+                    latestDisplay,
+                    current,
+                    installer?.Name ?? "(none)");
+                return UpdateCheckResult.Available(
+                    current,
+                    latestDisplay,
+                    release.Body,
+                    release.HtmlUrl,
+                    installer?.BrowserDownloadUrl,
+                    installer?.Size ?? 0);
             }
 
             _logger.LogInformation("No update available (installed {Current}, latest {Latest})", current, latestDisplay);
@@ -90,6 +101,26 @@ public sealed class GitHubUpdateService : IUpdateService
         }
     }
 
+    /// <summary>
+    /// Picks the Inno Setup installer from a release's assets: the one named
+    /// <c>DictateFlowSetup-v*.exe</c> (as produced by <c>scripts/release.ps1</c>), never the
+    /// <c>DictateFlowPortable-*.zip</c>. Returns <see langword="null"/> when no such asset
+    /// exists so the caller falls back to linking the release page.
+    /// </summary>
+    private static GitHubAsset? SelectInstallerAsset(IReadOnlyList<GitHubAsset>? assets)
+    {
+        if (assets is null)
+        {
+            return null;
+        }
+
+        return assets.FirstOrDefault(asset =>
+            !string.IsNullOrWhiteSpace(asset.Name)
+            && !string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl)
+            && asset.Name.StartsWith("DictateFlowSetup", StringComparison.OrdinalIgnoreCase)
+            && asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>The subset of the GitHub release payload this service reads.</summary>
     private sealed class GitHubRelease
     {
@@ -104,5 +135,21 @@ public sealed class GitHubUpdateService : IUpdateService
 
         [JsonPropertyName("prerelease")]
         public bool Prerelease { get; set; }
+
+        [JsonPropertyName("assets")]
+        public List<GitHubAsset>? Assets { get; set; }
+    }
+
+    /// <summary>The subset of a GitHub release asset this service reads.</summary>
+    private sealed class GitHubAsset
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("browser_download_url")]
+        public string? BrowserDownloadUrl { get; set; }
+
+        [JsonPropertyName("size")]
+        public long Size { get; set; }
     }
 }
