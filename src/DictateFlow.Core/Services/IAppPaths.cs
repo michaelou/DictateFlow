@@ -22,6 +22,9 @@ public interface IAppPaths
     /// <summary>Gets the directory that holds prompt definition files (populated in M4).</summary>
     string PromptsDirectory { get; }
 
+    /// <summary>Gets the directory that holds user-defined voice command files, one JSON file per command (issue #27).</summary>
+    string CommandsDirectory { get; }
+
     /// <summary>
     /// Gets the directory that holds local inference engines (e.g. whisper.cpp), one
     /// subdirectory per engine. Rooted under local (non-roaming) application data in

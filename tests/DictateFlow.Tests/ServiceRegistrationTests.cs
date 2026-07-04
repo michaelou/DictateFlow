@@ -157,15 +157,27 @@ public sealed class ServiceRegistrationTests : IDisposable
         // Fail closed until issue #30 registers the dialog implementation.
         Assert.IsType<DenyingCommandConfirmationService>(provider.GetRequiredService<ICommandConfirmationService>());
 
-        // The mock action is the whole allowlist for now; its definition source makes
-        // "test command" an end-to-end voice command out of the box.
+        // The allowlist is the mock plus the three built-in launch actions (issue #27).
         var resolver = provider.GetRequiredService<ICommandActionResolver>();
-        Assert.Equal([MockCommandAction.RegistrationName], resolver.GetActionTypes());
+        Assert.Equal(
+            [
+                MockCommandAction.RegistrationName,
+                ProcessStartAction.RegistrationName,
+                OpenUrlAction.RegistrationName,
+                OpenFolderAction.RegistrationName,
+            ],
+            resolver.GetActionTypes());
         Assert.True(resolver.TryResolve(MockCommandAction.RegistrationName, out var action));
         Assert.IsType<MockCommandAction>(action);
+        Assert.IsType<ProcessLauncher>(provider.GetRequiredService<IProcessLauncher>());
+
+        // The aggregated sources include the mock's "test command", the built-in launch
+        // commands (code) and the seeded user JSON commands.
         var definitions = provider.GetServices<ICommandDefinitionSource>()
             .SelectMany(s => s.GetDefinitions()).ToList();
         Assert.Contains(definitions, d => d.ActionType == MockCommandAction.RegistrationName);
+        Assert.Contains(definitions, d => d.Name == "Open Notepad" && d.ActionType == ProcessStartAction.RegistrationName);
+        Assert.Contains(definitions, d => d.ActionType == OpenUrlAction.RegistrationName);
     }
 
     [Fact]

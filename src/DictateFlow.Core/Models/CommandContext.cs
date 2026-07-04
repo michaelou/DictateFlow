@@ -8,6 +8,11 @@ namespace DictateFlow.Core.Models;
 /// <param name="CommandName">Display name of the matched command.</param>
 /// <param name="ActionType">The action type name the command resolved to.</param>
 /// <param name="ActionValue">The configured action payload from the command definition (e.g. <c>notepad.exe</c>).</param>
+/// <param name="ActionArguments">
+/// The configured action arguments template (e.g. a process-arguments string). May contain the
+/// <c>{{Argument}}</c> placeholder into which <see cref="Argument"/> is substituted; empty when
+/// the command configures none.
+/// </param>
 /// <param name="Argument">
 /// The utterance remainder after the matched phrase, verbatim (e.g. <c>in 10 minutes to call
 /// Marko</c> after <c>remind me</c>); empty when the phrase matched the whole utterance.
@@ -18,6 +23,7 @@ public sealed record CommandContext(
     string CommandName,
     string ActionType,
     string ActionValue,
+    string ActionArguments,
     string Argument,
     string Transcript,
     DateTime TimestampUtc);

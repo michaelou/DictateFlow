@@ -151,8 +151,8 @@ public sealed class VoiceCommandService : IVoiceCommandService
         CancellationToken cancellationToken)
     {
         var context = new CommandContext(
-            definition.Name, definition.ActionType, definition.ActionValue, argument, transcript,
-            _timeProvider.GetUtcNow().UtcDateTime);
+            definition.Name, definition.ActionType, definition.ActionValue, definition.ActionArguments,
+            argument, transcript, _timeProvider.GetUtcNow().UtcDateTime);
         var timeoutSeconds = Math.Max(1, settings.CommandTimeoutSeconds);
         try
         {
