@@ -1037,63 +1037,156 @@
                                   Content="Play command _sounds (recognized, success, failure)"
                                   IsChecked="{Binding VoiceEnableSounds}" />
 
-                        <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Loaded commands" />
-                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
-                                   FontSize="11"
-                                   Margin="0,0,0,6"
-                                   TextWrapping="Wrap"
-                                   Text="Built-in commands plus any JSON files in the commands folder. “arg” marks commands that use the spoken words after the phrase." />
-                        <ItemsControl ItemsSource="{Binding LoadedCommands}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <DockPanel Margin="0,0,0,6">
-                                        <Border DockPanel.Dock="Right"
-                                                VerticalAlignment="Center"
-                                                Margin="8,0,0,0"
-                                                Padding="5,1"
-                                                Background="{StaticResource AccentBrush}"
-                                                CornerRadius="3">
-                                            <TextBlock FontSize="10"
-                                                       Foreground="White"
-                                                       Text="arg" />
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding TakesArgument}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
-                                        <TextBlock DockPanel.Dock="Right"
-                                                   VerticalAlignment="Center"
-                                                   Margin="8,0,0,0"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource SecondaryTextBrush}"
-                                                   Text="{Binding ActionType}" />
-                                        <StackPanel>
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
-                                            <TextBlock FontSize="11"
-                                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding Phrases}" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <TextBlock Margin="0,16,0,6" FontWeight="SemiBold" Text="Commands" />
 
-                        <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                            <Button Width="88"
-                                    Content="Reload"
-                                    Command="{Binding ReloadCommandsCommand}" />
-                            <Button Width="160"
-                                    Margin="8,0,0,0"
-                                    Content="Open commands folder"
-                                    Command="{Binding OpenCommandsFolderCommand}" />
-                        </StackPanel>
+                        <!-- Elevated command panel: search, the (filterable) list, and CRUD actions. -->
+                        <Border Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource SurfaceBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="12">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12"
+                                                  Direction="270"
+                                                  ShadowDepth="2"
+                                                  Opacity="0.5"
+                                                  Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                           FontSize="11"
+                                           Margin="0,0,0,8"
+                                           TextWrapping="Wrap"
+                                           Text="Built-in commands plus any JSON files in the commands folder. “arg” marks commands that use the spoken words after the phrase. Only your own commands can be edited or deleted." />
+
+                                <!-- Search / filter -->
+                                <Grid Margin="0,0,0,8">
+                                    <TextBox x:Name="CommandFilterBox"
+                                             Text="{Binding CommandFilter, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               IsHitTestVisible="False"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               Text="Search commands by name, phrase or action…">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CommandFilter}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+
+                                <ItemsControl MaxHeight="220" ItemsSource="{Binding CommandsView}">
+                                    <ItemsControl.Template>
+                                        <ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                <ItemsPresenter />
+                                            </ScrollViewer>
+                                        </ControlTemplate>
+                                    </ItemsControl.Template>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="0,0,0,8">
+                                                <!-- Edit / Delete only for the user's own commands. -->
+                                                <StackPanel DockPanel.Dock="Right"
+                                                            VerticalAlignment="Center"
+                                                            Orientation="Horizontal">
+                                                    <StackPanel.Style>
+                                                        <Style TargetType="StackPanel">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsUserCommand}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </StackPanel.Style>
+                                                    <Button Width="52"
+                                                            Margin="8,0,0,0"
+                                                            Content="Edit"
+                                                            Command="{Binding DataContext.EditVoiceCommandCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Width="56"
+                                                            Margin="6,0,0,0"
+                                                            Content="Delete"
+                                                            Command="{Binding DataContext.DeleteVoiceCommandCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                                <Border DockPanel.Dock="Right"
+                                                        VerticalAlignment="Center"
+                                                        Margin="8,0,0,0"
+                                                        Padding="5,1"
+                                                        Background="{StaticResource AccentBrush}"
+                                                        CornerRadius="3">
+                                                    <TextBlock FontSize="10"
+                                                               Foreground="White"
+                                                               Text="arg" />
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding TakesArgument}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                </Border>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           VerticalAlignment="Center"
+                                                           Margin="8,0,0,0"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                                           Text="{Binding ActionType}" />
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                                               TextWrapping="Wrap"
+                                                               Text="{Binding Phrases}" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Empty-state message when the filter matches nothing. -->
+                                <TextBlock Margin="0,4,0,0"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           FontStyle="Italic"
+                                           Text="No commands match your search.">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CommandsView.IsEmpty}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                    <Button Width="120"
+                                            Content="New command"
+                                            Command="{Binding NewVoiceCommandCommand}" />
+                                    <Button Width="88"
+                                            Margin="8,0,0,0"
+                                            Content="Reload"
+                                            Command="{Binding ReloadCommandsCommand}" />
+                                    <Button Width="160"
+                                            Margin="8,0,0,0"
+                                            Content="Open commands folder"
+                                            Command="{Binding OpenCommandsFolderCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <TextBlock Margin="0,12,0,0"

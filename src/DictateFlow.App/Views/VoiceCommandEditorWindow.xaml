@@ -1,0 +1,105 @@
+<Window x:Class="DictateFlow.App.Views.VoiceCommandEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Width="540"
+        Height="560"
+        MinWidth="420"
+        MinHeight="440"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock FontWeight="SemiBold" Text="Name" />
+            <TextBox Margin="0,4,0,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <DockPanel Grid.Row="1" Margin="0,10,0,0">
+            <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Trigger phrases" />
+            <TextBlock DockPanel.Dock="Top"
+                       Margin="0,2,0,4"
+                       FontSize="11"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       TextWrapping="Wrap"
+                       Text="One per line. Matched case-insensitively, ignoring punctuation. A phrase can be a prefix — the words spoken after it become the {{Argument}}." />
+            <TextBox AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     Text="{Binding PhrasesText, UpdateSourceTrigger=PropertyChanged}" />
+        </DockPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+            <TextBlock FontWeight="SemiBold" Text="Action type" />
+            <ComboBox Width="200"
+                      Margin="0,4,0,0"
+                      HorizontalAlignment="Left"
+                      ItemsSource="{Binding ActionTypes}"
+                      SelectedItem="{Binding ActionType}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBlock FontWeight="SemiBold" Text="Value" />
+            <TextBox Margin="0,4,0,0" Text="{Binding ActionValue, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Margin="0,2,0,0"
+                       FontSize="11"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       TextWrapping="Wrap"
+                       Text="{Binding ValueHint}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Margin="0,10,0,0" IsEnabled="{Binding SupportsArguments}">
+            <TextBlock FontWeight="SemiBold" Text="Arguments" />
+            <TextBox Margin="0,4,0,0"
+                     FontFamily="Consolas"
+                     Text="{Binding ActionArguments, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Margin="0,2,0,0"
+                       FontSize="11"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       TextWrapping="Wrap"
+                       Text="Optional process arguments. Use {{Argument}} to insert the spoken words (escaped as one argument). Only ProcessStart uses this." />
+        </StackPanel>
+
+        <CheckBox Grid.Row="5"
+                  Margin="0,12,0,0"
+                  Content="Enabled"
+                  IsChecked="{Binding Enabled}" />
+
+        <CheckBox Grid.Row="6"
+                  Margin="0,6,0,0"
+                  Content="Require confirmation before this command runs"
+                  IsChecked="{Binding RequiresConfirmation}" />
+
+        <TextBlock Grid.Row="7"
+                   Margin="0,8,0,0"
+                   Foreground="{StaticResource ErrorBrush}"
+                   TextWrapping="Wrap"
+                   Text="{Binding ValidationError}" />
+
+        <StackPanel Grid.Row="8"
+                    Margin="0,10,0,0"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+            <Button Width="88"
+                    Margin="0,0,8,0"
+                    Content="Save"
+                    IsDefault="True"
+                    Command="{Binding SaveCommand}" />
+            <Button Width="88"
+                    Content="Cancel"
+                    IsCancel="True"
+                    Command="{Binding CancelCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>

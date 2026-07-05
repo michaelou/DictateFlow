@@ -19,7 +19,7 @@ namespace DictateFlow.Core.Services.Commands;
 /// <c>{{Argument}}</c> placeholder used where it is not allowed all cause the file to be
 /// skipped — it can never be matched or executed.
 /// </remarks>
-public sealed class CommandStore : ICommandDefinitionSource
+public sealed class CommandStore : ICommandDefinitionSource, IVoiceCommandStore
 {
     private static readonly JsonSerializerOptions ReadOptions = new()
     {
@@ -76,6 +76,109 @@ public sealed class CommandStore : ICommandDefinitionSource
             _signature = null;
         }
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<CommandDefinition> GetUserCommands() => GetDefinitions();
+
+    /// <inheritdoc />
+    public void Save(CommandDefinition command)
+    {
+        var file = ToFile(command);
+        var normalized = file.ToDefinition();
+
+        if (CommandNameRules.Validate(normalized.Name) is { } nameError)
+        {
+            throw new ArgumentException(nameError, nameof(command));
+        }
+
+        if (Validate(normalized) is { } error)
+        {
+            throw new ArgumentException(error, nameof(command));
+        }
+
+        var name = normalized.Name.Trim();
+        lock (_gate)
+        {
+            var directory = _appPaths.CommandsDirectory;
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(
+                Path.Combine(directory, $"{name}.json"),
+                JsonSerializer.Serialize(file, WriteOptions));
+            _logger.LogInformation("Saved user command '{Name}'", name);
+            _signature = null; // force a reload on the next read.
+        }
+    }
+
+    /// <inheritdoc />
+    public void Delete(string name)
+    {
+        lock (_gate)
+        {
+            var directory = _appPaths.CommandsDirectory;
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
+            // Match by filename so a Name/filename casing mismatch still deletes the file.
+            var file = Directory.EnumerateFiles(directory, "*.json").FirstOrDefault(
+                f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+            if (file is null)
+            {
+                return;
+            }
+
+            File.Delete(file);
+            _logger.LogInformation("Deleted user command file '{File}'", file);
+            _signature = null; // force a reload on the next read.
+        }
+    }
+
+    /// <summary>
+    /// Validates a definition the same way <see cref="TryReadDefinition"/> does — non-empty phrases,
+    /// a known action type, and the action's own configuration rules — returning the first failure
+    /// message (or <see langword="null"/> when acceptable) so <see cref="Save"/> can reject a bad
+    /// command up front rather than silently writing a file that later fails to load.
+    /// </summary>
+    private string? Validate(CommandDefinition definition)
+    {
+        if (definition.Phrases.Count == 0)
+        {
+            return "At least one phrase is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ActionType))
+        {
+            return "An action type is required.";
+        }
+
+        if (!_actionResolver.TryResolve(definition.ActionType, out var action))
+        {
+            return $"Unknown action type '{definition.ActionType}'.";
+        }
+
+        if (action is ICommandActionValidator validator && validator.Validate(definition) is { } error)
+        {
+            return error;
+        }
+
+        return null;
+    }
+
+    /// <summary>Projects a runtime definition back into the nested-action on-disk schema for writing.</summary>
+    private static CommandDefinitionFile ToFile(CommandDefinition definition) => new()
+    {
+        Name = definition.Name,
+        Enabled = definition.Enabled,
+        Phrases = definition.Phrases,
+        Action = new CommandActionFile
+        {
+            Type = definition.ActionType,
+            Value = definition.ActionValue,
+            Arguments = definition.ActionArguments,
+        },
+        RequiresConfirmation = definition.RequiresConfirmation,
+    };
 
     /// <summary>Seeds the example files if needed, then loads every valid command file.</summary>
     private IReadOnlyList<CommandDefinition> Load()

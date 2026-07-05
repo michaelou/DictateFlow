@@ -204,6 +204,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICommandDefinitionSource, BuiltInCommandDefinitionSource>();
         services.AddSingleton<CommandStore>();
         services.AddSingleton<ICommandDefinitionSource>(sp => sp.GetRequiredService<CommandStore>());
+        services.AddSingleton<IVoiceCommandStore>(sp => sp.GetRequiredService<CommandStore>());
 
         // Output pipeline (M5): history write, the mode-aware confirmation gate, and the
         // orchestrator itself.

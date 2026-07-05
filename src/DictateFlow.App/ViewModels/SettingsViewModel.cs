@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DictateFlow.App.Services;
@@ -37,12 +39,20 @@ namespace DictateFlow.App.ViewModels;
 /// <param name="DisplayName">Name shown in the dropdown.</param>
 public sealed record MicrophoneOption(string? DeviceId, string DisplayName);
 
-/// <summary>One read-only row in the Voice Commands "loaded commands" list.</summary>
+/// <summary>One row in the Voice Commands "loaded commands" list.</summary>
 /// <param name="Name">The command's display name.</param>
 /// <param name="Phrases">The trigger phrases, joined for display.</param>
 /// <param name="ActionType">The action type the command runs.</param>
 /// <param name="TakesArgument">Whether the command consumes the spoken argument.</param>
-public sealed record LoadedCommandItem(string Name, string Phrases, string ActionType, bool TakesArgument);
+/// <param name="IsUserCommand">Whether the command comes from the editable user command store (built-ins are read-only).</param>
+/// <param name="Definition">The underlying definition, used to open the editor; <see langword="null"/> for built-ins.</param>
+public sealed record LoadedCommandItem(
+    string Name,
+    string Phrases,
+    string ActionType,
+    bool TakesArgument,
+    bool IsUserCommand,
+    CommandDefinition? Definition);
 
 /// <summary>One editable row on the Rules settings page.</summary>
 public partial class ApplicationRuleItem : ObservableObject
@@ -139,6 +149,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly WhisperCppModelManager _whisperModelManager;
     private readonly ParakeetModelManager _parakeetModelManager;
     private readonly IEnumerable<ICommandDefinitionSource> _commandSources;
+    private readonly IVoiceCommandStore _voiceCommandStore;
+    private readonly ICommandActionResolver _commandActionResolver;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isAutomaticOutput;
@@ -165,6 +177,8 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="whisperModelManager">Manages the local whisper.cpp engine and models (Local Models page).</param>
     /// <param name="parakeetModelManager">Manages the local Parakeet model files (Local Models page).</param>
     /// <param name="commandSources">All registered command definition sources, listed on the Voice Commands page.</param>
+    /// <param name="voiceCommandStore">Creates, edits and deletes the user command files (Voice Commands page CRUD).</param>
+    /// <param name="commandActionResolver">Supplies the action types offered in the command editor and validates them.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public SettingsViewModel(
         ISettingsService settingsService,
@@ -185,6 +199,8 @@ public partial class SettingsViewModel : ObservableObject
         WhisperCppModelManager whisperModelManager,
         ParakeetModelManager parakeetModelManager,
         IEnumerable<ICommandDefinitionSource> commandSources,
+        IVoiceCommandStore voiceCommandStore,
+        ICommandActionResolver commandActionResolver,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
@@ -204,7 +220,17 @@ public partial class SettingsViewModel : ObservableObject
         _whisperModelManager = whisperModelManager;
         _parakeetModelManager = parakeetModelManager;
         _commandSources = commandSources;
+        _voiceCommandStore = voiceCommandStore;
+        _commandActionResolver = commandActionResolver;
         _logger = logger;
+
+        // The user command editor offers the launch action types only — the built-in DictateFlow
+        // app operations and the test-only Mock action are not user-authorable.
+        CommandActionTypes = [.. _commandActionResolver.GetActionTypes().Where(IsUserAuthorableAction)];
+
+        // A filtered live view over LoadedCommands drives the searchable list on the page.
+        CommandsView = CollectionViewSource.GetDefaultView(LoadedCommands);
+        CommandsView.Filter = FilterCommand;
 
         var options = new List<MicrophoneOption> { new(null, "System default") };
         options.AddRange(microphoneEnumerator.GetMicrophones().Select(m => new MicrophoneOption(m.DeviceId, m.Name)));
@@ -663,6 +689,43 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Gets the loaded voice commands (built-in and user JSON) shown on the Voice Commands page.</summary>
     public ObservableCollection<LoadedCommandItem> LoadedCommands { get; } = [];
+
+    /// <summary>Gets the filtered live view over <see cref="LoadedCommands"/> the page binds to.</summary>
+    public ICollectionView CommandsView { get; }
+
+    /// <summary>Gets the action types offered when creating or editing a user command.</summary>
+    public IReadOnlyList<string> CommandActionTypes { get; }
+
+    /// <summary>Gets or sets the text that filters the voice command list by name, phrase or action type.</summary>
+    [ObservableProperty]
+    private string _commandFilter = "";
+
+    /// <summary>Re-applies the command filter whenever the search text changes.</summary>
+    partial void OnCommandFilterChanged(string value) => CommandsView.Refresh();
+
+    /// <summary>The <see cref="CommandsView"/> predicate: matches name, phrases or action type against the filter.</summary>
+    private bool FilterCommand(object item)
+    {
+        if (string.IsNullOrWhiteSpace(CommandFilter))
+        {
+            return true;
+        }
+
+        if (item is not LoadedCommandItem command)
+        {
+            return false;
+        }
+
+        var term = CommandFilter.Trim();
+        return command.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || command.Phrases.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || command.ActionType.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether an action type can back a user-authored command (excludes app-only and test actions).</summary>
+    private static bool IsUserAuthorableAction(string actionType)
+        => !string.Equals(actionType, DictateFlowAction.RegistrationName, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(actionType, MockCommandAction.RegistrationName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Gets the user commands directory shown and opened on the Voice Commands page.</summary>
     public string CommandsDirectoryPath => _appPaths.CommandsDirectory;
@@ -1300,13 +1363,17 @@ public partial class SettingsViewModel : ObservableObject
                 continue;
             }
 
+            // Only the user command store is editable; every other source is shipped as code.
+            var isUserSource = ReferenceEquals(source, _voiceCommandStore);
             foreach (var definition in definitions)
             {
                 LoadedCommands.Add(new LoadedCommandItem(
                     definition.Name,
                     string.Join(", ", definition.Phrases),
                     definition.ActionType,
-                    TakesArgument(definition)));
+                    TakesArgument(definition),
+                    isUserSource,
+                    isUserSource ? definition : null));
             }
         }
     }
@@ -1317,6 +1384,98 @@ public partial class SettingsViewModel : ObservableObject
             || CommandArgumentPlaceholder.Contains(definition.ActionArguments)
             || (string.Equals(definition.ActionType, DictateFlowAction.RegistrationName, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(definition.ActionValue, nameof(DictateFlowOperation.SwitchPromptMode), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Opens the editor dialog to create a new user voice command.</summary>
+    [RelayCommand]
+    private void NewVoiceCommand() => ShowVoiceCommandEditor(null);
+
+    /// <summary>Opens the editor dialog for an existing user voice command.</summary>
+    [RelayCommand]
+    private void EditVoiceCommand(LoadedCommandItem? item)
+    {
+        if (item?.Definition is { } definition)
+        {
+            ShowVoiceCommandEditor(definition);
+        }
+    }
+
+    /// <summary>Deletes a user voice command after confirmation.</summary>
+    [RelayCommand]
+    private void DeleteVoiceCommand(LoadedCommandItem? item)
+    {
+        if (item is not { IsUserCommand: true } || item.Definition is null)
+        {
+            return;
+        }
+
+        if (!_dialogService.Confirm(
+                "Delete voice command",
+                $"Delete the voice command '{item.Name}'? Its file is removed from the commands folder."))
+        {
+            return;
+        }
+
+        try
+        {
+            _voiceCommandStore.Delete(item.Name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not delete voice command '{Name}'", item.Name);
+            ValidationError = $"Could not delete the command: {ex.Message}";
+            return;
+        }
+
+        RefreshLoadedCommands();
+    }
+
+    /// <summary>
+    /// Shows the command editor dialog and persists its result. A rename writes the new file and
+    /// removes the old one, mirroring the prompt-mode editor.
+    /// </summary>
+    private void ShowVoiceCommandEditor(CommandDefinition? existing)
+    {
+        if (CommandActionTypes.Count == 0)
+        {
+            ValidationError = "No user-authorable command actions are available.";
+            return;
+        }
+
+        var otherNames = _voiceCommandStore.GetUserCommands()
+            .Where(c => existing is null || !string.Equals(c.Name, existing.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Name)
+            .ToList();
+        var viewModel = new VoiceCommandEditorViewModel(existing, otherNames, CommandActionTypes, _commandActionResolver);
+        var window = new VoiceCommandEditorWindow { DataContext = viewModel };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.ShowDialog();
+
+        if (viewModel.Result is not { } result)
+        {
+            return;
+        }
+
+        var renamedFrom = viewModel.OriginalName is { } oldName
+            && !string.Equals(oldName, result.Name, StringComparison.OrdinalIgnoreCase)
+                ? oldName
+                : null;
+        try
+        {
+            _voiceCommandStore.Save(result);
+            if (renamedFrom is not null)
+            {
+                _voiceCommandStore.Delete(renamedFrom);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not save voice command '{Name}'", result.Name);
+            ValidationError = $"Could not save the command: {ex.Message}";
+            return;
+        }
+
+        RefreshLoadedCommands();
+    }
 
     /// <summary>Opens the editor dialog to create a new prompt mode.</summary>
     [RelayCommand]

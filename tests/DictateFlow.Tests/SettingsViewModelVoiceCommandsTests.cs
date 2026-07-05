@@ -1,7 +1,9 @@
+using System.Linq;
 using DictateFlow.App;
 using DictateFlow.App.Services.Commands;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
+using DictateFlow.Core.Services.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DictateFlow.Tests;
@@ -108,5 +110,56 @@ public sealed class SettingsViewModelVoiceCommandsTests : IDisposable
         viewModel.ReloadCommandsCommand.Execute(null);
 
         Assert.NotEmpty(viewModel.LoadedCommands);
+    }
+
+    [Fact]
+    public void CommandActionTypes_OfferLaunchActionsButNotAppOrTestActions()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.Contains(ProcessStartAction.RegistrationName, viewModel.CommandActionTypes);
+        Assert.Contains(OpenUrlAction.RegistrationName, viewModel.CommandActionTypes);
+        Assert.Contains(OpenFolderAction.RegistrationName, viewModel.CommandActionTypes);
+        Assert.DoesNotContain(DictateFlowAction.RegistrationName, viewModel.CommandActionTypes);
+        Assert.DoesNotContain(MockCommandAction.RegistrationName, viewModel.CommandActionTypes);
+    }
+
+    [Fact]
+    public void LoadedCommands_MarkUserCommandsEditableAndBuiltInsReadOnly()
+    {
+        WriteUserCommand("Unique test cmd",
+            """{"name":"Unique test cmd","phrases":["do the unique thing"],"action":{"type":"ProcessStart","value":"notepad.exe"}}""");
+
+        var viewModel = CreateViewModel();
+
+        var user = Assert.Single(viewModel.LoadedCommands, c => c.Name == "Unique test cmd");
+        Assert.True(user.IsUserCommand);
+        Assert.NotNull(user.Definition);
+
+        var builtIn = Assert.Single(viewModel.LoadedCommands, c => c.Name == "Open Settings");
+        Assert.False(builtIn.IsUserCommand);
+        Assert.Null(builtIn.Definition);
+    }
+
+    [Fact]
+    public void CommandFilter_NarrowsTheView()
+    {
+        WriteUserCommand("Unique test cmd",
+            """{"name":"Unique test cmd","phrases":["do the unique thing"],"action":{"type":"ProcessStart","value":"notepad.exe"}}""");
+        var viewModel = CreateViewModel();
+
+        viewModel.CommandFilter = "unique thing"; // matches the phrase only
+
+        var shown = viewModel.CommandsView.Cast<LoadedCommandItem>().ToList();
+        Assert.Equal("Unique test cmd", Assert.Single(shown).Name);
+
+        viewModel.CommandFilter = "";
+        Assert.True(viewModel.CommandsView.Cast<LoadedCommandItem>().Count() > 1);
+    }
+
+    private void WriteUserCommand(string name, string json)
+    {
+        Directory.CreateDirectory(_paths.CommandsDirectory);
+        File.WriteAllText(Path.Combine(_paths.CommandsDirectory, $"{name}.json"), json);
     }
 }

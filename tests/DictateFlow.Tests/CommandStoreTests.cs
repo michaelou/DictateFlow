@@ -200,4 +200,113 @@ public sealed class CommandStoreTests : IDisposable
         // Consistent with the prompt store: an empty directory reseeds the examples.
         Assert.Equal(DefaultCommandFiles.All.Count, _store.GetDefinitions().Count);
     }
+
+    [Fact]
+    public void Save_WritesNestedSchema_AndTheCommandLoads()
+    {
+        _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "Open calc",
+            Phrases = ["open calc", "open calculator"],
+            ActionType = ProcessStartAction.RegistrationName,
+            ActionValue = "calc.exe",
+        });
+
+        Assert.True(File.Exists(CommandFile("Open calc")));
+        var json = File.ReadAllText(CommandFile("Open calc"));
+        Assert.Contains("\"action\"", json); // nested action object, not a flat field
+        Assert.Contains("\"type\": \"ProcessStart\"", json);
+
+        var definition = Assert.Single(_store.GetUserCommands(), d => d.Name == "Open calc");
+        Assert.Equal("calc.exe", definition.ActionValue);
+        Assert.Equal(["open calc", "open calculator"], definition.Phrases);
+    }
+
+    [Fact]
+    public void Save_Overwrite_ReplacesTheExistingCommand()
+    {
+        _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "Site",
+            Phrases = ["open site"],
+            ActionType = OpenUrlAction.RegistrationName,
+            ActionValue = "https://example.com/",
+        });
+
+        _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "Site",
+            Phrases = ["open site"],
+            ActionType = OpenUrlAction.RegistrationName,
+            ActionValue = "https://example.org/",
+        });
+
+        var definition = Assert.Single(_store.GetUserCommands());
+        Assert.Equal("https://example.org/", definition.ActionValue);
+    }
+
+    [Fact]
+    public void Save_InvalidName_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "a/b",
+            Phrases = ["x"],
+            ActionType = ProcessStartAction.RegistrationName,
+            ActionValue = "notepad.exe",
+        }));
+
+        Assert.False(File.Exists(CommandFile("a")));
+        Assert.NotNull(ex.Message);
+    }
+
+    [Fact]
+    public void Save_ActionValidationFailure_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "Bad url",
+            Phrases = ["go"],
+            ActionType = OpenUrlAction.RegistrationName,
+            ActionValue = "file:///C:/Windows",
+        }));
+
+        Assert.False(File.Exists(CommandFile("Bad url")));
+    }
+
+    [Fact]
+    public void Save_UnknownActionType_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => _store.Save(new Core.Models.CommandDefinition
+        {
+            Name = "Danger",
+            Phrases = ["run"],
+            ActionType = "PowerShellScript",
+            ActionValue = "whatever",
+        }));
+    }
+
+    [Fact]
+    public void Delete_RemovesTheFile_CaseInsensitively()
+    {
+        Write("Keep", """{"name":"Keep","phrases":["keep"],"action":{"type":"ProcessStart","value":"notepad.exe"}}""");
+        Write("Gone", """{"name":"Gone","phrases":["gone"],"action":{"type":"ProcessStart","value":"calc.exe"}}""");
+        Assert.Equal(2, _store.GetUserCommands().Count);
+
+        _store.Delete("gone"); // different casing than the file name
+
+        var definition = Assert.Single(_store.GetUserCommands());
+        Assert.Equal("Keep", definition.Name);
+        Assert.False(File.Exists(CommandFile("Gone")));
+    }
+
+    [Fact]
+    public void Delete_MissingCommand_DoesNothing()
+    {
+        Write("Keep", """{"name":"Keep","phrases":["keep"],"action":{"type":"ProcessStart","value":"notepad.exe"}}""");
+
+        _store.Delete("nope");
+
+        Assert.Single(_store.GetUserCommands());
+    }
 }
