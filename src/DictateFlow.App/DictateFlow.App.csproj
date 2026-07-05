@@ -52,4 +52,11 @@
     <Resource Include="Resources\refresh.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Short voice-command feedback cues, played from disk by CommandSoundPlayer. -->
+    <Content Include="Resources\Sounds\command-recognized.wav" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Resources\Sounds\command-success.wav" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Resources\Sounds\command-failure.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

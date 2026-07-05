@@ -5,7 +5,6 @@ using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.Prompts;
-using DictateFlow.Core.Services.Updates;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App.ViewModels;
@@ -15,37 +14,33 @@ namespace DictateFlow.App.ViewModels;
 /// </summary>
 public partial class TrayViewModel : ObservableObject
 {
-    private readonly IWindowService _windowService;
+    private readonly IAppActions _appActions;
     private readonly IShutdownService _shutdownService;
     private readonly IDictationController _dictationController;
     private readonly ISettingsService _settingsService;
     private readonly IPromptModeStore _promptModeStore;
-    private readonly IUpdateService _updateService;
     private readonly ILogger<TrayViewModel> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="TrayViewModel"/> class.</summary>
-    /// <param name="windowService">Opens application windows.</param>
+    /// <param name="appActions">Runs the window and update operations (shared with voice commands).</param>
     /// <param name="shutdownService">Performs clean application shutdown.</param>
     /// <param name="dictationController">Starts and stops dictation recordings.</param>
     /// <param name="settingsService">Reads and persists the active prompt mode.</param>
     /// <param name="promptModeStore">Supplies the available prompt modes.</param>
-    /// <param name="updateService">Checks GitHub for a newer release.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public TrayViewModel(
-        IWindowService windowService,
+        IAppActions appActions,
         IShutdownService shutdownService,
         IDictationController dictationController,
         ISettingsService settingsService,
         IPromptModeStore promptModeStore,
-        IUpdateService updateService,
         ILogger<TrayViewModel> logger)
     {
-        _windowService = windowService;
+        _appActions = appActions;
         _shutdownService = shutdownService;
         _dictationController = dictationController;
         _settingsService = settingsService;
         _promptModeStore = promptModeStore;
-        _updateService = updateService;
         _logger = logger;
     }
 
@@ -108,17 +103,22 @@ public partial class TrayViewModel : ObservableObject
     /// <summary>Opens the Settings window.</summary>
     [RelayCommand]
     private void OpenSettings()
-        => _windowService.ShowSettingsWindow();
+        => _appActions.OpenSettings();
+
+    /// <summary>Opens the Settings window scrolled to the Voice Commands section.</summary>
+    [RelayCommand]
+    private void OpenVoiceCommands()
+        => _appActions.OpenSettings("Voice Commands");
 
     /// <summary>Opens the History window.</summary>
     [RelayCommand]
     private void OpenHistory()
-        => _windowService.ShowHistoryWindow();
+        => _appActions.ShowHistory();
 
     /// <summary>Opens the Cost Dashboard window.</summary>
     [RelayCommand]
     private void OpenCostDashboard()
-        => _windowService.ShowCostDashboardWindow();
+        => _appActions.OpenCostDashboard();
 
     /// <summary>
     /// Checks GitHub for a newer release and shows the result dialog. The check itself never
@@ -128,8 +128,7 @@ public partial class TrayViewModel : ObservableObject
     private async Task CheckForUpdatesAsync()
     {
         _logger.LogInformation("Checking for updates from tray menu");
-        var result = await _updateService.CheckForUpdatesAsync();
-        _windowService.ShowUpdateWindow(result);
+        await _appActions.CheckForUpdatesAsync();
     }
 
     /// <summary>Shuts the application down cleanly.</summary>

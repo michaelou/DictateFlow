@@ -1,5 +1,6 @@
 using DictateFlow.App;
 using DictateFlow.App.Services;
+using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Services.Output;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
@@ -154,14 +155,18 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.IsType<VoiceCommandService>(provider.GetRequiredService<IVoiceCommandService>());
         Assert.NotNull(provider.GetRequiredService<IWakePhraseDetector>());
         Assert.NotNull(provider.GetRequiredService<ICommandMatcher>());
-        // Fail closed until issue #30 registers the dialog implementation.
-        Assert.IsType<DenyingCommandConfirmationService>(provider.GetRequiredService<ICommandConfirmationService>());
+        // Issue #30 registers the dialog implementation, replacing the fail-closed default,
+        // and the overlay/sound command feedback (replacing the no-op default).
+        Assert.IsType<CommandConfirmationService>(provider.GetRequiredService<ICommandConfirmationService>());
+        Assert.IsType<CommandFeedbackService>(provider.GetRequiredService<ICommandFeedback>());
 
-        // The allowlist is the mock plus the three built-in launch actions (issue #27).
+        // The allowlist is the mock, the DictateFlow app action (issue #30) and the three
+        // built-in launch actions (issue #27).
         var resolver = provider.GetRequiredService<ICommandActionResolver>();
         Assert.Equal(
             [
                 MockCommandAction.RegistrationName,
+                DictateFlowAction.RegistrationName,
                 ProcessStartAction.RegistrationName,
                 OpenUrlAction.RegistrationName,
                 OpenFolderAction.RegistrationName,

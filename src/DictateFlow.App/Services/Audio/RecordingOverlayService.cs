@@ -53,6 +53,27 @@ public sealed class RecordingOverlayService : IRecordingOverlay, IDisposable
     });
 
     /// <inheritdoc />
+    public void ShowCommandExecuting(string commandName) => OnUiThread(() =>
+    {
+        _viewModel.CommandName = commandName;
+        ShowState(OverlayState.CommandExecuting);
+    });
+
+    /// <inheritdoc />
+    public void ShowCommandSuccess(string message) => OnUiThread(() =>
+    {
+        _viewModel.CommandMessage = message;
+        ShowState(OverlayState.CommandSuccess);
+    });
+
+    /// <inheritdoc />
+    public void ShowCommandError(string message) => OnUiThread(() =>
+    {
+        _viewModel.CommandMessage = message;
+        ShowState(OverlayState.CommandError);
+    });
+
+    /// <inheritdoc />
     public void Hide() => OnUiThread(() =>
     {
         _viewModel.State = OverlayState.Hidden;

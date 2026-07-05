@@ -18,6 +18,7 @@ public sealed class VoiceCommandService : IVoiceCommandService
     private readonly IEnumerable<ICommandDefinitionSource> _definitionSources;
     private readonly ICommandActionResolver _actionResolver;
     private readonly ICommandConfirmationService _confirmationService;
+    private readonly ICommandFeedback _feedback;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<VoiceCommandService> _logger;
 
@@ -28,6 +29,7 @@ public sealed class VoiceCommandService : IVoiceCommandService
     /// <param name="definitionSources">All registered definition sources; aggregated per utterance.</param>
     /// <param name="actionResolver">Resolves matched action types from the registered allowlist.</param>
     /// <param name="confirmationService">Approves confirmation-requiring commands; denies by default.</param>
+    /// <param name="feedback">Surfaces recognition and completion to the user (overlay/sounds); no-op by default.</param>
     /// <param name="timeProvider">Supplies the execution timestamp (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public VoiceCommandService(
@@ -37,6 +39,7 @@ public sealed class VoiceCommandService : IVoiceCommandService
         IEnumerable<ICommandDefinitionSource> definitionSources,
         ICommandActionResolver actionResolver,
         ICommandConfirmationService confirmationService,
+        ICommandFeedback feedback,
         TimeProvider timeProvider,
         ILogger<VoiceCommandService> logger)
     {
@@ -46,6 +49,7 @@ public sealed class VoiceCommandService : IVoiceCommandService
         _definitionSources = definitionSources;
         _actionResolver = actionResolver;
         _confirmationService = confirmationService;
+        _feedback = feedback;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -75,21 +79,25 @@ public sealed class VoiceCommandService : IVoiceCommandService
             }
 
             _logger.LogInformation("Wake phrase spoken but no command matched: '{CommandText}'", detection.CommandText);
-            return new CommandOutcome(
+            return Completed(new CommandOutcome(
                 CommandOutcomeStatus.Unknown, null,
                 detection.CommandText.Length == 0
                     ? "No command was spoken after the wake phrase."
-                    : $"Unknown voice command: “{detection.CommandText}”. Nothing was executed.");
+                    : $"Unknown voice command: “{detection.CommandText}”. Nothing was executed."));
         }
 
         var definition = match.Definition;
+
+        // A command was recognized: surface it (overlay/sound) before confirmation and execution.
+        Notify(() => _feedback.OnCommandRecognized(definition));
+
         if (definition.RequiresConfirmation || settings.RequireConfirmation)
         {
             if (!await ConfirmAsync(definition, cancellationToken).ConfigureAwait(false))
             {
                 _logger.LogInformation("Command '{CommandName}' declined at confirmation", definition.Name);
-                return new CommandOutcome(
-                    CommandOutcomeStatus.Declined, definition.Name, $"{definition.Name} was not executed.");
+                return Completed(new CommandOutcome(
+                    CommandOutcomeStatus.Declined, definition.Name, $"{definition.Name} was not executed."));
             }
         }
 
@@ -99,13 +107,34 @@ public sealed class VoiceCommandService : IVoiceCommandService
             _logger.LogError(
                 "Command '{CommandName}' uses unknown action type '{ActionType}'; valid types: {ValidTypes}",
                 definition.Name, definition.ActionType, string.Join(", ", _actionResolver.GetActionTypes()));
-            return new CommandOutcome(
+            return Completed(new CommandOutcome(
                 CommandOutcomeStatus.Failed, definition.Name,
-                $"{definition.Name} uses the unknown action type '{definition.ActionType}' and was not executed.");
+                $"{definition.Name} uses the unknown action type '{definition.ActionType}' and was not executed."));
         }
 
-        return await ExecuteAsync(action, definition, match.Argument, transcript, settings, cancellationToken)
+        var outcome = await ExecuteAsync(action, definition, match.Argument, transcript, settings, cancellationToken)
             .ConfigureAwait(false);
+        return Completed(outcome);
+    }
+
+    /// <summary>Reports a terminal outcome to the feedback sink (guarded) and returns it unchanged.</summary>
+    private CommandOutcome Completed(CommandOutcome outcome)
+    {
+        Notify(() => _feedback.OnCommandCompleted(outcome));
+        return outcome;
+    }
+
+    /// <summary>Invokes a feedback callback, swallowing failures — presentation must never break command handling.</summary>
+    private void Notify(Action feedback)
+    {
+        try
+        {
+            feedback();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Command feedback failed; ignoring");
+        }
     }
 
     /// <summary>Aggregates the definitions of all sources; a failing source is logged and skipped.</summary>

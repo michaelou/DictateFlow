@@ -64,4 +64,27 @@ public partial class OverlayViewModel : ObservableObject
     /// <summary>Gets the text the overlay shows in the Error state.</summary>
     public string ErrorDisplayText
         => ErrorMessage is null ? "⚠️ Dictation failed" : $"⚠️ {ErrorMessage}";
+
+    /// <summary>Gets or sets the display name of the command shown in the command-executing state.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandExecutingText))]
+    private string _commandName = "";
+
+    /// <summary>
+    /// Gets or sets the command outcome message shown in the command-success and command-error
+    /// states (e.g. <c>Opening Notepad</c>).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandSuccessText))]
+    [NotifyPropertyChangedFor(nameof(CommandErrorText))]
+    private string _commandMessage = "";
+
+    /// <summary>Gets the text the overlay shows while a command is executing.</summary>
+    public string CommandExecutingText => $"⚡ Command: {CommandName}";
+
+    /// <summary>Gets the text the overlay shows when a command executed successfully.</summary>
+    public string CommandSuccessText => $"✓ {CommandMessage}";
+
+    /// <summary>Gets the text the overlay shows when a command failed or matched nothing.</summary>
+    public string CommandErrorText => $"⚠️ {CommandMessage}";
 }

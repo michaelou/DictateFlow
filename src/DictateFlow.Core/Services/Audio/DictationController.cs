@@ -332,6 +332,16 @@ public sealed class DictationController : IDictationController, IDisposable
             result = new PipelineResult(false, null, null, "Dictation failed unexpectedly — see the log for details.");
         }
 
+        if (result.Command is { } command)
+        {
+            // The utterance was a voice command, not dictation: no text is pasted and no
+            // DictationFailed is raised. The overlay shows the command outcome (the recognized
+            // command's executing state and the command sounds are driven by the command
+            // feedback service while the pipeline runs).
+            ShowCommandOutcome(command);
+            return;
+        }
+
         if (!result.Success)
         {
             var message = result.ErrorMessage ?? "Dictation failed.";
@@ -353,6 +363,33 @@ public sealed class DictationController : IDictationController, IDisposable
 
         _overlay.ShowSuccess();
         RunGuarded(() => HideOverlayAfterDelayAsync(SuccessOverlayDuration));
+    }
+
+    /// <summary>
+    /// Shows a handled voice command's outcome on the overlay and auto-hides it: an executed
+    /// command shows its success message (Success duration); a failed or unknown-command outcome
+    /// shows its message in the error state (Error duration); a declined command just hides.
+    /// </summary>
+    /// <param name="command">The command outcome carried on the pipeline result.</param>
+    private void ShowCommandOutcome(CommandOutcome command)
+    {
+        switch (command.Status)
+        {
+            case CommandOutcomeStatus.Executed:
+                _overlay.ShowCommandSuccess(command.Message);
+                RunGuarded(() => HideOverlayAfterDelayAsync(SuccessOverlayDuration));
+                break;
+
+            case CommandOutcomeStatus.Failed:
+            case CommandOutcomeStatus.Unknown:
+                _overlay.ShowCommandError(command.Message);
+                RunGuarded(() => HideOverlayAfterDelayAsync(ErrorOverlayDuration));
+                break;
+
+            default: // Declined — the user chose not to run it; the confirmation dialog was the feedback.
+                _overlay.Hide();
+                break;
+        }
     }
 
     /// <summary>Hides the overlay after <paramref name="delay"/>, unless a new recording started.</summary>

@@ -989,6 +989,119 @@
                                  IsChecked="{Binding IsPreviewOutput}" />
                 </StackPanel>
 
+                <!-- Voice Commands page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Voice Commands">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Voice Commands" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Say the wake phrase followed by a command (e.g. “Hey John, open Settings”) to run it instead of dictating. Changes apply immediately after Save." />
+
+                    <CheckBox Margin="0,12,0,0"
+                              Content="_Enable voice commands"
+                              IsChecked="{Binding VoiceCommandsEnabled}" />
+
+                    <!-- Everything below is disabled while the master toggle is off. -->
+                    <StackPanel Margin="0,4,0,0" IsEnabled="{Binding VoiceCommandsEnabled}">
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Wake phrase" />
+                        <TextBox Width="220"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding VoiceWakePhrase, UpdateSourceTrigger=PropertyChanged}" />
+                        <CheckBox Margin="0,8,0,0"
+                                  Content="Require the _wake phrase (when off, any utterance is checked against the command phrases)"
+                                  IsChecked="{Binding VoiceWakePhraseEnabled}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Command timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding VoiceCommandTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <CheckBox Margin="0,12,0,0"
+                                  Content="Require _confirmation before every command runs"
+                                  IsChecked="{Binding VoiceRequireConfirmation}" />
+                        <CheckBox Margin="0,8,0,0"
+                                  Content="Play command _sounds (recognized, success, failure)"
+                                  IsChecked="{Binding VoiceEnableSounds}" />
+
+                        <TextBlock Margin="0,16,0,4" FontWeight="SemiBold" Text="Loaded commands" />
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,0,0,6"
+                                   TextWrapping="Wrap"
+                                   Text="Built-in commands plus any JSON files in the commands folder. “arg” marks commands that use the spoken words after the phrase." />
+                        <ItemsControl ItemsSource="{Binding LoadedCommands}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,6">
+                                        <Border DockPanel.Dock="Right"
+                                                VerticalAlignment="Center"
+                                                Margin="8,0,0,0"
+                                                Padding="5,1"
+                                                Background="{StaticResource AccentBrush}"
+                                                CornerRadius="3">
+                                            <TextBlock FontSize="10"
+                                                       Foreground="White"
+                                                       Text="arg" />
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding TakesArgument}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8,0,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   Text="{Binding ActionType}" />
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                            <TextBlock FontSize="11"
+                                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Phrases}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                            <Button Width="88"
+                                    Content="Reload"
+                                    Command="{Binding ReloadCommandsCommand}" />
+                            <Button Width="160"
+                                    Margin="8,0,0,0"
+                                    Content="Open commands folder"
+                                    Command="{Binding OpenCommandsFolderCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="{StaticResource ErrorBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
                 <!-- Dictionary (technical terms) page -->
                 <StackPanel>
                     <StackPanel.Style>

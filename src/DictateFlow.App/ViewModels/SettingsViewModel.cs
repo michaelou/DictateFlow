@@ -6,10 +6,12 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DictateFlow.App.Services;
+using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Views;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.Diagnostics;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Prompts;
@@ -34,6 +36,13 @@ namespace DictateFlow.App.ViewModels;
 /// <param name="DeviceId">Persisted device identifier, or <see langword="null"/> for the system default.</param>
 /// <param name="DisplayName">Name shown in the dropdown.</param>
 public sealed record MicrophoneOption(string? DeviceId, string DisplayName);
+
+/// <summary>One read-only row in the Voice Commands "loaded commands" list.</summary>
+/// <param name="Name">The command's display name.</param>
+/// <param name="Phrases">The trigger phrases, joined for display.</param>
+/// <param name="ActionType">The action type the command runs.</param>
+/// <param name="TakesArgument">Whether the command consumes the spoken argument.</param>
+public sealed record LoadedCommandItem(string Name, string Phrases, string ActionType, bool TakesArgument);
 
 /// <summary>One editable row on the Rules settings page.</summary>
 public partial class ApplicationRuleItem : ObservableObject
@@ -129,6 +138,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IUpdateService _updateService;
     private readonly WhisperCppModelManager _whisperModelManager;
     private readonly ParakeetModelManager _parakeetModelManager;
+    private readonly IEnumerable<ICommandDefinitionSource> _commandSources;
     private readonly ILogger<SettingsViewModel> _logger;
 
     private bool _isAutomaticOutput;
@@ -154,6 +164,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <param name="updateService">Checks GitHub for a newer release for the "Check for updates" action.</param>
     /// <param name="whisperModelManager">Manages the local whisper.cpp engine and models (Local Models page).</param>
     /// <param name="parakeetModelManager">Manages the local Parakeet model files (Local Models page).</param>
+    /// <param name="commandSources">All registered command definition sources, listed on the Voice Commands page.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public SettingsViewModel(
         ISettingsService settingsService,
@@ -173,6 +184,7 @@ public partial class SettingsViewModel : ObservableObject
         IUpdateService updateService,
         WhisperCppModelManager whisperModelManager,
         ParakeetModelManager parakeetModelManager,
+        IEnumerable<ICommandDefinitionSource> commandSources,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService = settingsService;
@@ -191,6 +203,7 @@ public partial class SettingsViewModel : ObservableObject
         _updateService = updateService;
         _whisperModelManager = whisperModelManager;
         _parakeetModelManager = parakeetModelManager;
+        _commandSources = commandSources;
         _logger = logger;
 
         var options = new List<MicrophoneOption> { new(null, "System default") };
@@ -308,11 +321,20 @@ public partial class SettingsViewModel : ObservableObject
             ?? "Information";
 
         _launchAtStartup = _settingsService.Current.General.LaunchAtStartup;
+
+        var voice = _settingsService.Current.VoiceCommands;
+        _voiceCommandsEnabled = voice.Enabled;
+        _voiceWakePhrase = voice.WakePhrase;
+        _voiceWakePhraseEnabled = voice.WakePhraseEnabled;
+        _voiceCommandTimeoutSeconds = voice.CommandTimeoutSeconds;
+        _voiceRequireConfirmation = voice.RequireConfirmation;
+        _voiceEnableSounds = voice.EnableSounds;
+        RefreshLoadedCommands();
     }
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Rules", "Output", "History", "Pricing", "Backup", "Diagnostics"];
+        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Rules", "Output", "Voice Commands", "History", "Pricing", "Backup", "Diagnostics"];
 
     /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
     public IReadOnlyList<string> LogLevels { get; } =
@@ -615,6 +637,36 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _launchAtStartup;
 
+    /// <summary>Gets or sets a value indicating whether voice commands are detected and executed (the master toggle).</summary>
+    [ObservableProperty]
+    private bool _voiceCommandsEnabled;
+
+    /// <summary>Gets or sets the wake phrase that marks an utterance as a command (e.g. <c>Hey John</c>).</summary>
+    [ObservableProperty]
+    private string _voiceWakePhrase = "";
+
+    /// <summary>Gets or sets a value indicating whether the wake phrase is required for a command to match.</summary>
+    [ObservableProperty]
+    private bool _voiceWakePhraseEnabled;
+
+    /// <summary>Gets or sets the number of seconds a command action (and the confirmation prompt) may run before it is cancelled.</summary>
+    [ObservableProperty]
+    private int _voiceCommandTimeoutSeconds;
+
+    /// <summary>Gets or sets a value indicating whether every command requires confirmation before it executes.</summary>
+    [ObservableProperty]
+    private bool _voiceRequireConfirmation;
+
+    /// <summary>Gets or sets a value indicating whether command feedback sounds play.</summary>
+    [ObservableProperty]
+    private bool _voiceEnableSounds;
+
+    /// <summary>Gets the loaded voice commands (built-in and user JSON) shown on the Voice Commands page.</summary>
+    public ObservableCollection<LoadedCommandItem> LoadedCommands { get; } = [];
+
+    /// <summary>Gets the user commands directory shown and opened on the Voice Commands page.</summary>
+    public string CommandsDirectoryPath => _appPaths.CommandsDirectory;
+
     /// <summary>Gets or sets the status line of the last Backup-page action, if any.</summary>
     [ObservableProperty]
     private string? _backupStatus;
@@ -869,6 +921,14 @@ public partial class SettingsViewModel : ObservableObject
 
         _settingsService.Current.Logging.MinimumLevel = SelectedLogLevel;
         _settingsService.Current.General.LaunchAtStartup = LaunchAtStartup;
+
+        var voice = _settingsService.Current.VoiceCommands;
+        voice.Enabled = VoiceCommandsEnabled;
+        voice.WakePhrase = VoiceWakePhrase.Trim();
+        voice.WakePhraseEnabled = VoiceWakePhraseEnabled;
+        voice.CommandTimeoutSeconds = VoiceCommandTimeoutSeconds;
+        voice.RequireConfirmation = VoiceRequireConfirmation;
+        voice.EnableSounds = VoiceEnableSounds;
     }
 
     /// <summary>Discards unsaved edits by reloading settings from disk, then closes the window.</summary>
@@ -1195,6 +1255,68 @@ public partial class SettingsViewModel : ObservableObject
             ValidationError = "Could not open the prompts folder.";
         }
     }
+
+    /// <summary>Re-enumerates the command sources so external command-file edits show up without a restart.</summary>
+    [RelayCommand]
+    private void ReloadCommands()
+    {
+        RefreshLoadedCommands();
+        _logger.LogInformation("Voice commands reloaded: {Count} available", LoadedCommands.Count);
+    }
+
+    /// <summary>Opens the user commands directory in Windows Explorer, creating it if needed.</summary>
+    [RelayCommand]
+    private void OpenCommandsFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(_appPaths.CommandsDirectory);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_appPaths.CommandsDirectory}\"")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not open the commands folder");
+            ValidationError = "Could not open the commands folder.";
+        }
+    }
+
+    /// <summary>Rebuilds <see cref="LoadedCommands"/> from every registered command definition source.</summary>
+    private void RefreshLoadedCommands()
+    {
+        LoadedCommands.Clear();
+        foreach (var source in _commandSources)
+        {
+            IReadOnlyList<CommandDefinition> definitions;
+            try
+            {
+                definitions = source.GetDefinitions();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Command source {SourceType} failed while listing commands; skipping it", source.GetType().Name);
+                continue;
+            }
+
+            foreach (var definition in definitions)
+            {
+                LoadedCommands.Add(new LoadedCommandItem(
+                    definition.Name,
+                    string.Join(", ", definition.Phrases),
+                    definition.ActionType,
+                    TakesArgument(definition)));
+            }
+        }
+    }
+
+    /// <summary>Whether a command consumes the spoken argument (a <c>{{Argument}}</c> placeholder or an argument-consuming action).</summary>
+    private static bool TakesArgument(CommandDefinition definition)
+        => CommandArgumentPlaceholder.Contains(definition.ActionValue)
+            || CommandArgumentPlaceholder.Contains(definition.ActionArguments)
+            || (string.Equals(definition.ActionType, DictateFlowAction.RegistrationName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(definition.ActionValue, nameof(DictateFlowOperation.SwitchPromptMode), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Opens the editor dialog to create a new prompt mode.</summary>
     [RelayCommand]

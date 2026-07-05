@@ -21,4 +21,13 @@ public enum OverlayState
 
     /// <summary>The dictation failed (M5+).</summary>
     Error,
+
+    /// <summary>A recognized voice command is being executed (issue #30).</summary>
+    CommandExecuting,
+
+    /// <summary>A voice command executed successfully; shows its outcome message (issue #30).</summary>
+    CommandSuccess,
+
+    /// <summary>A voice command failed or the utterance matched no command; shows its outcome message (issue #30).</summary>
+    CommandError,
 }

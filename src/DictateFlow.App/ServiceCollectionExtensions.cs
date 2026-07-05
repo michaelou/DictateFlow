@@ -1,5 +1,6 @@
 using DictateFlow.App.Services;
 using DictateFlow.App.Services.Audio;
+using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Services.Output;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
@@ -168,16 +169,29 @@ public static class ServiceCollectionExtensions
 
         // Voice command framework (issue #26): the deterministic command branch of the
         // pipeline. Action types register like providers — one AddCommandAction line each;
-        // the catalog is the fixed allowlist of what a command can execute. The confirmation
-        // default denies (fail closed); issue #30 replaces it with the dialog implementation
-        // via TryAdd.
+        // the catalog is the fixed allowlist of what a command can execute.
         services.AddSingleton<IWakePhraseDetector, WakePhraseDetector>();
         services.AddSingleton<ICommandMatcher, CommandMatcher>();
         services.AddSingleton<ICommandActionResolver, CommandActionResolver>();
         services.AddSingleton<IVoiceCommandService, VoiceCommandService>();
+
+        // App integration (issue #30): the real confirmation dialog and command feedback
+        // (overlay command state + sounds). Both are registered before the Core defaults so
+        // their TryAdd fallbacks (fail-closed deny / no-op feedback) are skipped.
+        services.AddSingleton<IAppActions, AppActions>();
+        services.AddSingleton<ICommandSoundPlayer, CommandSoundPlayer>();
+        services.AddSingleton<ICommandConfirmationService, CommandConfirmationService>();
+        services.AddSingleton<ICommandFeedback, CommandFeedbackService>();
         services.TryAddSingleton<ICommandConfirmationService, DenyingCommandConfirmationService>();
+        services.TryAddSingleton<ICommandFeedback, NullCommandFeedback>();
+
         services.AddSingleton<ICommandDefinitionSource, MockCommandDefinitionSource>();
         services.AddCommandAction<MockCommandAction>(MockCommandAction.RegistrationName);
+
+        // Built-in DictateFlow app actions (issue #30): Settings/History/Cost Dashboard/update
+        // check and prompt-mode switching by voice, sharing the tray's code via IAppActions.
+        services.AddCommandAction<DictateFlowAction>(DictateFlowAction.RegistrationName);
+        services.AddSingleton<ICommandDefinitionSource, DictateFlowCommandDefinitionSource>();
 
         // Built-in launch actions (issue #27): each registers like a provider — one line — and
         // becomes part of the fixed allowlist. All three share one process-launch seam so they

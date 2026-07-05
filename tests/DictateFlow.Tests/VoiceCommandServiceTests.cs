@@ -16,6 +16,7 @@ public sealed class VoiceCommandServiceTests
 {
     private readonly Mock<ISettingsService> _settings = new();
     private readonly Mock<ICommandConfirmationService> _confirmation = new();
+    private readonly Mock<ICommandFeedback> _feedback = new();
     private readonly AppSettings _appSettings = new();
     private readonly FakeCommandActionResolver _resolver = new();
     private readonly RecordingCommandAction _action = new();
@@ -48,6 +49,7 @@ public sealed class VoiceCommandServiceTests
             [definitionSource.Object],
             _resolver,
             confirmation ?? _confirmation.Object,
+            _feedback.Object,
             TimeProvider.System,
             Mock.Of<ILogger<VoiceCommandService>>());
     }
@@ -253,6 +255,7 @@ public sealed class VoiceCommandServiceTests
             [broken.Object, working.Object],
             _resolver,
             _confirmation.Object,
+            _feedback.Object,
             TimeProvider.System,
             Mock.Of<ILogger<VoiceCommandService>>());
 

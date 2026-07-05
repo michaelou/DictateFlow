@@ -31,14 +31,31 @@ public sealed class WindowService : IWindowService
     }
 
     /// <inheritdoc />
-    public void ShowSettingsWindow()
+    public void ShowSettingsWindow() => OpenSettings(section: null);
+
+    /// <inheritdoc />
+    public void ShowSettingsWindow(string section) => OpenSettings(section);
+
+    /// <summary>Shared implementation: opens or focuses Settings, optionally selecting a section.</summary>
+    /// <param name="section">The navigation section to select, or <see langword="null"/> to keep the current one.</param>
+    private void OpenSettings(string? section)
     {
         if (TryActivate(_settingsWindow))
         {
+            if (section is not null && _settingsWindow!.DataContext is SettingsViewModel existing)
+            {
+                existing.SelectedSection = section;
+            }
+
             return;
         }
 
         var viewModel = _serviceProvider.GetRequiredService<SettingsViewModel>();
+        if (section is not null)
+        {
+            viewModel.SelectedSection = section;
+        }
+
         var window = new SettingsWindow { DataContext = viewModel };
         viewModel.CloseRequested += (_, _) => window.Close();
         window.Closed += (_, _) => _settingsWindow = null;

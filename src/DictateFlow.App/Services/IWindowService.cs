@@ -14,6 +14,13 @@ public interface IWindowService
     void ShowSettingsWindow();
 
     /// <summary>
+    /// Shows the Settings window scrolled to <paramref name="section"/>. If it is already open,
+    /// the existing instance is focused and switched to that section.
+    /// </summary>
+    /// <param name="section">The navigation section to select (e.g. <c>Voice Commands</c>).</param>
+    void ShowSettingsWindow(string section);
+
+    /// <summary>
     /// Shows the History window. If it is already open, the existing instance is
     /// restored and focused instead of creating a second one.
     /// </summary>

@@ -376,6 +376,65 @@ public sealed class DictationControllerTests
     }
 
     [Fact]
+    public async Task StopRecordingAsync_ExecutedCommand_ShowsCommandSuccessNotDictationSuccess()
+    {
+        SetupCaptureWithAudio();
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipelineResult(
+                true, null, "hey john open settings", null,
+                Command: new CommandOutcome(CommandOutcomeStatus.Executed, "Open Settings", "Opening Settings.")));
+        var controller = CreateController();
+        string? failure = null;
+        controller.DictationFailed += (_, e) => failure = e.Message;
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.Null(failure); // a command is not a dictation failure
+        _overlay.Verify(o => o.ShowCommandSuccess("Opening Settings."), Times.Once);
+        _overlay.Verify(o => o.ShowSuccess(), Times.Never);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_UnknownCommand_ShowsCommandErrorWithoutRaisingFailed()
+    {
+        SetupCaptureWithAudio();
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipelineResult(
+                false, null, "hey john do a barrel roll", "Unknown voice command.",
+                Command: new CommandOutcome(CommandOutcomeStatus.Unknown, null, "Unknown voice command.")));
+        var controller = CreateController();
+        string? failure = null;
+        controller.DictationFailed += (_, e) => failure = e.Message;
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        Assert.Null(failure); // unknown command shows on the overlay only, no tray notification
+        _overlay.Verify(o => o.ShowCommandError("Unknown voice command."), Times.Once);
+        _overlay.Verify(o => o.ShowError(It.IsAny<string?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_DeclinedCommand_HidesOverlay()
+    {
+        SetupCaptureWithAudio();
+        _pipeline.Setup(p => p.RunAsync(It.IsAny<PipelineRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PipelineResult(
+                true, null, "hey john delete everything", null,
+                Command: new CommandOutcome(CommandOutcomeStatus.Declined, "Delete", "Delete was not executed.")));
+        var controller = CreateController();
+
+        await controller.StartRecordingAsync();
+        await controller.StopRecordingAsync();
+
+        _overlay.Verify(o => o.Hide(), Times.Once);
+        _overlay.Verify(o => o.ShowCommandSuccess(It.IsAny<string>()), Times.Never);
+        _overlay.Verify(o => o.ShowCommandError(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task LevelChanged_ForwardsLevelToOverlay()
     {
         var controller = CreateController();
