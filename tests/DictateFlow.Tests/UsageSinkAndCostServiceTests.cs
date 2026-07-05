@@ -88,6 +88,9 @@ public sealed class UsageSinkAndCostServiceTests : IDisposable
     [Fact]
     public void Record_DatabaseMissing_DoesNotThrow()
     {
+        // Release the pooled connection opened during initialization so Windows frees the
+        // file handle; otherwise File.Delete intermittently throws IOException (file locked).
+        SqliteConnection.ClearAllPools();
         File.Delete(_paths.DatabaseFilePath);
 
         _sink.Record(SpeechRecord(_time.UtcNow.UtcDateTime, seconds: 60)); // must never throw
