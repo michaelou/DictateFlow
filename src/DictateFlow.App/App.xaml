@@ -29,6 +29,7 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}" />
+                        <MenuItem Header="Voice Commands" Command="{Binding OpenVoiceCommandsCommand}" />
                         <MenuItem Header="History" Command="{Binding OpenHistoryCommand}" />
                         <MenuItem Header="Cost Dashboard" Command="{Binding OpenCostDashboardCommand}" />
                         <Separator />

@@ -65,6 +65,18 @@
                                 <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Error}">
                                     <Setter Property="Text" Value="{Binding ErrorDisplayText}" />
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.CommandExecuting}">
+                                    <Setter Property="Text" Value="{Binding CommandExecutingText}" />
+                                    <Setter Property="Foreground" Value="#FF7FB8FF" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.CommandSuccess}">
+                                    <Setter Property="Text" Value="{Binding CommandSuccessText}" />
+                                    <Setter Property="Foreground" Value="#FF4CC38A" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.CommandError}">
+                                    <Setter Property="Text" Value="{Binding CommandErrorText}" />
+                                    <Setter Property="Foreground" Value="#FFE5C07B" />
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>

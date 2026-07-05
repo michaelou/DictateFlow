@@ -37,6 +37,24 @@ public interface IRecordingOverlay
     /// </param>
     void ShowError(string? message = null);
 
+    /// <summary>
+    /// Shows the overlay in the command-executing state while a recognized voice command runs,
+    /// distinct from the normal Processing state (issue #30).
+    /// </summary>
+    /// <param name="commandName">The display name of the command being executed.</param>
+    void ShowCommandExecuting(string commandName);
+
+    /// <summary>Shows the overlay in the command-success state with the command's outcome message (issue #30).</summary>
+    /// <param name="message">The user-presentable success message (e.g. <c>Opening Notepad</c>).</param>
+    void ShowCommandSuccess(string message);
+
+    /// <summary>
+    /// Shows the overlay in the command-error state — a command failed, or the utterance matched
+    /// no command and nothing executed — with the outcome message (issue #30).
+    /// </summary>
+    /// <param name="message">The user-presentable failure or unknown-command message.</param>
+    void ShowCommandError(string message);
+
     /// <summary>Hides the overlay.</summary>
     void Hide();
 }
