@@ -139,7 +139,7 @@ public sealed class OpenRouterTranscriptionProvider : ITranscriptionProvider
                 var errorBody = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
                 throw new ProviderException(
                     ProviderName,
-                    $"OpenRouter returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{OpenRouterError.Describe(errorBody)} Check the model slug (it must accept audio input) in Settings → Speech.");
+                    $"OpenRouter returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{OpenRouterError.Describe(errorBody)} The model must be a multimodal chat model that accepts audio input (e.g. google/gemini-2.5-flash or openai/gpt-4o-audio-preview) — transcription-only models such as Whisper are not usable through OpenRouter. Check the model slug in Settings → Speech.");
             }
 
             var json = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
