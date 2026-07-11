@@ -28,6 +28,7 @@ using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.OpenRouter;
 using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using Microsoft.Extensions.Logging;
@@ -64,6 +65,26 @@ public partial class ApplicationRuleItem : ObservableObject
     /// <summary>Gets or sets the prompt-mode name applied when the rule matches.</summary>
     [ObservableProperty]
     private string _promptMode = "";
+}
+
+/// <summary>One editable row on the Replacements settings page (issue #35).</summary>
+public partial class ReplacementRuleItem : ObservableObject
+{
+    /// <summary>Gets or sets the misheard word or phrase to search for.</summary>
+    [ObservableProperty]
+    private string _from = "";
+
+    /// <summary>Gets or sets the text each occurrence of <see cref="From"/> is replaced with.</summary>
+    [ObservableProperty]
+    private string _to = "";
+
+    /// <summary>Gets or sets a value indicating whether only whole words match.</summary>
+    [ObservableProperty]
+    private bool _wholeWord = true;
+
+    /// <summary>Gets or sets a value indicating whether the match is case-sensitive.</summary>
+    [ObservableProperty]
+    private bool _caseSensitive;
 }
 
 /// <summary>One row on the Local Models settings page: a downloadable engine or model.</summary>
@@ -267,6 +288,13 @@ public partial class SettingsViewModel : ObservableObject
         _azureSpeechLanguage = azureSpeech.Language;
         _azureSpeechTimeoutSeconds = azureSpeech.TimeoutSeconds;
 
+        var openRouterSpeech = _configReader.GetConfig<OpenRouterTranscriptionConfig>(
+            ProviderKind.Transcription, OpenRouterProviders.RegistrationName);
+        _openRouterSpeechApiKey = openRouterSpeech.ApiKey;
+        _openRouterSpeechModel = openRouterSpeech.Model;
+        _openRouterSpeechLanguage = openRouterSpeech.Language;
+        _openRouterSpeechTimeoutSeconds = openRouterSpeech.TimeoutSeconds;
+
         var mockSpeech = _configReader.GetConfig<MockTranscriptionConfig>(
             ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName);
         _mockSpeechDelayMs = mockSpeech.DelayMs;
@@ -315,6 +343,14 @@ public partial class SettingsViewModel : ObservableObject
         _ollamaMaxTokens = ollama.MaxTokens;
         _ollamaTimeoutSeconds = ollama.TimeoutSeconds;
 
+        var openRouter = _configReader.GetConfig<OpenRouterLlmConfig>(
+            ProviderKind.Llm, OpenRouterProviders.RegistrationName);
+        _openRouterApiKey = openRouter.ApiKey;
+        _openRouterModel = openRouter.Model;
+        _openRouterTemperature = openRouter.Temperature;
+        _openRouterMaxTokens = openRouter.MaxTokens;
+        _openRouterTimeoutSeconds = openRouter.TimeoutSeconds;
+
         var mockLlm = _configReader.GetConfig<MockLlmConfig>(
             ProviderKind.Llm, MockLLMProvider.RegistrationName);
         _mockLlmDelayMs = mockLlm.DelayMs;
@@ -333,6 +369,14 @@ public partial class SettingsViewModel : ObservableObject
         _historyMaxEntries = history.MaxEntries;
 
         DictionaryTerms = [.. _settingsService.Current.TechnicalDictionary];
+        ReplacementRules = [.. _settingsService.Current.Replacements
+            .Select(r => new ReplacementRuleItem
+            {
+                From = r.From,
+                To = r.To,
+                WholeWord = r.WholeWord,
+                CaseSensitive = r.CaseSensitive,
+            })];
         ApplicationRules = [.. _settingsService.Current.ApplicationRules
             .Select(r => new ApplicationRuleItem { ProcessName = r.ProcessName, PromptMode = r.PromptMode })];
 
@@ -360,7 +404,7 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Rules", "Output", "Voice Commands", "History", "Pricing", "Backup", "Diagnostics"];
+        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Replacements", "Rules", "Output", "Voice Commands", "History", "Pricing", "Backup", "Diagnostics"];
 
     /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
     public IReadOnlyList<string> LogLevels { get; } =
@@ -451,6 +495,22 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the Azure Speech non-streaming transcription timeout in seconds.</summary>
     [ObservableProperty]
     private int _azureSpeechTimeoutSeconds;
+
+    /// <summary>Gets or sets the OpenRouter (speech) API key.</summary>
+    [ObservableProperty]
+    private string _openRouterSpeechApiKey;
+
+    /// <summary>Gets or sets the OpenRouter audio-capable model slug used to transcribe.</summary>
+    [ObservableProperty]
+    private string _openRouterSpeechModel;
+
+    /// <summary>Gets or sets the OpenRouter (speech) optional spoken-language hint (a BCP-47 tag); empty auto-detects.</summary>
+    [ObservableProperty]
+    private string _openRouterSpeechLanguage;
+
+    /// <summary>Gets or sets the OpenRouter (speech) request timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _openRouterSpeechTimeoutSeconds;
 
     /// <summary>Gets or sets the inline result of the last Speech "Test connection" run, if any.</summary>
     [ObservableProperty]
@@ -589,6 +649,26 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private int _ollamaTimeoutSeconds;
 
+    /// <summary>Gets or sets the OpenRouter API key.</summary>
+    [ObservableProperty]
+    private string _openRouterApiKey;
+
+    /// <summary>Gets or sets the OpenRouter model slug, e.g. <c>openai/gpt-4o-mini</c>.</summary>
+    [ObservableProperty]
+    private string _openRouterModel;
+
+    /// <summary>Gets or sets the OpenRouter default sampling temperature; modes can override it.</summary>
+    [ObservableProperty]
+    private double _openRouterTemperature;
+
+    /// <summary>Gets or sets the OpenRouter maximum number of completion tokens per request.</summary>
+    [ObservableProperty]
+    private int _openRouterMaxTokens;
+
+    /// <summary>Gets or sets the OpenRouter request timeout in seconds.</summary>
+    [ObservableProperty]
+    private int _openRouterTimeoutSeconds;
+
     /// <summary>Gets or sets the inline result of the last LLM "Test connection" run, if any.</summary>
     [ObservableProperty]
     private string? _llmTestResult;
@@ -632,6 +712,9 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the term typed into the dictionary add box.</summary>
     [ObservableProperty]
     private string _newDictionaryTerm = "";
+
+    /// <summary>Gets the editable replacement-dictionary rules (issue #35).</summary>
+    public ObservableCollection<ReplacementRuleItem> ReplacementRules { get; }
 
     /// <summary>Gets the editable application rules.</summary>
     public ObservableCollection<ApplicationRuleItem> ApplicationRules { get; }
@@ -972,6 +1055,15 @@ public partial class SettingsViewModel : ObservableObject
         history.MaxEntries = HistoryMaxEntries;
 
         _settingsService.Current.TechnicalDictionary = [.. DictionaryTerms];
+        _settingsService.Current.Replacements = [.. ReplacementRules
+            .Where(r => !string.IsNullOrWhiteSpace(r.From))
+            .Select(r => new ReplacementRule
+            {
+                From = r.From.Trim(),
+                To = r.To,
+                WholeWord = r.WholeWord,
+                CaseSensitive = r.CaseSensitive,
+            })];
         _settingsService.Current.ApplicationRules = [.. ApplicationRules
             .Where(r => !string.IsNullOrWhiteSpace(r.ProcessName))
             .Select(r => new ApplicationRule { ProcessName = r.ProcessName.Trim(), PromptMode = r.PromptMode })];
@@ -1676,6 +1768,22 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Appends an empty replacement rule row for editing.</summary>
+    [RelayCommand]
+    private void AddReplacementRule()
+        => ReplacementRules.Add(new ReplacementRuleItem());
+
+    /// <summary>Removes one replacement rule row.</summary>
+    /// <param name="rule">The row to remove.</param>
+    [RelayCommand]
+    private void RemoveReplacementRule(ReplacementRuleItem? rule)
+    {
+        if (rule is not null)
+        {
+            ReplacementRules.Remove(rule);
+        }
+    }
+
     /// <summary>Appends an empty application rule row for editing.</summary>
     [RelayCommand]
     private void AddApplicationRule()
@@ -1911,6 +2019,15 @@ public partial class SettingsViewModel : ObservableObject
                 Language = AzureSpeechLanguage.Trim(),
                 TimeoutSeconds = AzureSpeechTimeoutSeconds,
             });
+        // Read-modify-write keeps config-only fields (e.g. Endpoint) that have no UI.
+        var openRouterSpeech = _configReader.GetConfig<OpenRouterTranscriptionConfig>(
+            ProviderKind.Transcription, OpenRouterProviders.RegistrationName);
+        openRouterSpeech.ApiKey = OpenRouterSpeechApiKey.Trim();
+        openRouterSpeech.Model = OpenRouterSpeechModel.Trim();
+        openRouterSpeech.Language = OpenRouterSpeechLanguage.Trim();
+        openRouterSpeech.TimeoutSeconds = OpenRouterSpeechTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Transcription, OpenRouterProviders.RegistrationName, openRouterSpeech);
+
         _configReader.SetConfig(ProviderKind.Transcription, MockTranscriptionProvider.RegistrationName,
             new MockTranscriptionConfig { DelayMs = MockSpeechDelayMs, Text = MockSpeechText });
 
@@ -1964,6 +2081,16 @@ public partial class SettingsViewModel : ObservableObject
                 MaxTokens = OllamaMaxTokens,
                 TimeoutSeconds = OllamaTimeoutSeconds,
             });
+
+        // Read-modify-write keeps config-only fields (e.g. Endpoint) that have no UI.
+        var openRouter = _configReader.GetConfig<OpenRouterLlmConfig>(
+            ProviderKind.Llm, OpenRouterProviders.RegistrationName);
+        openRouter.ApiKey = OpenRouterApiKey.Trim();
+        openRouter.Model = OpenRouterModel.Trim();
+        openRouter.Temperature = OpenRouterTemperature;
+        openRouter.MaxTokens = OpenRouterMaxTokens;
+        openRouter.TimeoutSeconds = OpenRouterTimeoutSeconds;
+        _configReader.SetConfig(ProviderKind.Llm, OpenRouterProviders.RegistrationName, openRouter);
 
         _configReader.SetConfig(ProviderKind.Llm, MockLLMProvider.RegistrationName,
             new MockLlmConfig { DelayMs = MockLlmDelayMs });

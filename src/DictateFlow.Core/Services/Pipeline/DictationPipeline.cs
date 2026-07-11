@@ -5,6 +5,7 @@ using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
 using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Prompts;
+using DictateFlow.Core.Services.Replacements;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 
@@ -32,6 +33,7 @@ public sealed class DictationPipeline : IDictationPipeline
 {
     private readonly ITranscriptionProvider _transcriptionProvider;
     private readonly IVoiceCommandService _voiceCommandService;
+    private readonly ITextReplacementService _textReplacementService;
     private readonly IPromptModeSelector _promptModeSelector;
     private readonly IPromptResolver _promptResolver;
     private readonly ILLMProvider _llmProvider;
@@ -44,6 +46,7 @@ public sealed class DictationPipeline : IDictationPipeline
     /// <summary>Initializes a new instance of the <see cref="DictationPipeline"/> class.</summary>
     /// <param name="transcriptionProvider">Converts the capture into text.</param>
     /// <param name="voiceCommandService">Handles the transcript as a voice command when it is one.</param>
+    /// <param name="textReplacementService">Applies the replacement dictionary to the transcript (issue #35).</param>
     /// <param name="promptModeSelector">Picks the prompt mode from the application rules (or the active mode).</param>
     /// <param name="promptResolver">Builds the LLM prompt context for the transcript.</param>
     /// <param name="llmProvider">Enhances the transcript.</param>
@@ -55,6 +58,7 @@ public sealed class DictationPipeline : IDictationPipeline
     public DictationPipeline(
         ITranscriptionProvider transcriptionProvider,
         IVoiceCommandService voiceCommandService,
+        ITextReplacementService textReplacementService,
         IPromptModeSelector promptModeSelector,
         IPromptResolver promptResolver,
         ILLMProvider llmProvider,
@@ -66,6 +70,7 @@ public sealed class DictationPipeline : IDictationPipeline
     {
         _transcriptionProvider = transcriptionProvider;
         _voiceCommandService = voiceCommandService;
+        _textReplacementService = textReplacementService;
         _promptModeSelector = promptModeSelector;
         _promptResolver = promptResolver;
         _llmProvider = llmProvider;
@@ -142,6 +147,17 @@ public sealed class DictationPipeline : IDictationPipeline
                 isCommandSuccess, null, transcript,
                 isCommandSuccess ? null : commandOutcome.Message,
                 Command: commandOutcome);
+        }
+
+        // 2.5 Replacement dictionary (issue #35): fix speech-to-text mishearings deterministically,
+        //     after command detection (so wake/command phrases match the raw transcript) and before
+        //     enhancement (so the LLM sees, and history records, the corrected text). Corrections
+        //     therefore stick whether or not enhancement runs.
+        var corrected = _textReplacementService.Apply(transcript);
+        if (!ReferenceEquals(corrected, transcript) && corrected != transcript)
+        {
+            _logger.LogDebug("Replacement dictionary changed the transcript before enhancement");
+            transcript = corrected;
         }
 
         // 3. Enhance. A failure degrades to the raw transcript with a warning for the gate.

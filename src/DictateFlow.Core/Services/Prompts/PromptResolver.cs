@@ -9,9 +9,9 @@ namespace DictateFlow.Core.Services.Prompts;
 /// <summary>
 /// Default <see cref="IPromptResolver"/> implementation. Replaces the <c>{{Variable}}</c>
 /// tokens (case-insensitive) in the selected mode's system prompt:
-/// <c>{{Transcript}}</c>, <c>{{ApplicationName}}</c>, <c>{{Mode}}</c>, <c>{{CurrentDate}}</c>
-/// and <c>{{TechnicalDictionary}}</c>. Unknown tokens are left as-is with a warning; an
-/// unknown mode falls back to <c>Raw</c>.
+/// <c>{{Transcript}}</c>, <c>{{ApplicationName}}</c>, <c>{{Mode}}</c>, <c>{{CurrentDate}}</c>,
+/// <c>{{TechnicalDictionary}}</c> and <c>{{ReplacementDictionary}}</c>. Unknown tokens are left
+/// as-is with a warning; an unknown mode falls back to <c>Raw</c>.
 /// </summary>
 public sealed partial class PromptResolver : IPromptResolver
 {
@@ -89,8 +89,19 @@ public sealed partial class PromptResolver : IPromptResolver
             "mode" => modeName,
             "currentdate" => _timeProvider.GetLocalNow().ToString("yyyy-MM-dd"),
             "technicaldictionary" => string.Join(", ", settings.TechnicalDictionary),
+            "replacementdictionary" => FormatReplacements(settings.Replacements),
             _ => KeepUnknownToken(match.Value),
         };
+
+    /// <summary>
+    /// Renders the replacement dictionary as a comma-separated <c>from → to</c> list for the
+    /// <c>{{ReplacementDictionary}}</c> variable, so a prompt can tell the model which
+    /// corrections were already applied and must not be reversed. Empty when nothing is configured.
+    /// </summary>
+    private static string FormatReplacements(IReadOnlyList<ReplacementRule> replacements)
+        => string.Join(", ", replacements
+            .Where(r => !string.IsNullOrEmpty(r.From))
+            .Select(r => $"{r.From} → {r.To}"));
 
     /// <summary>Logs and preserves a token the resolver does not recognize.</summary>
     private string KeepUnknownToken(string token)

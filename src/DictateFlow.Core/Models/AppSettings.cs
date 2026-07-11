@@ -48,6 +48,14 @@ public sealed class AppSettings
     public List<string> TechnicalDictionary { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the replacement dictionary (issue #35): find-and-replace rules applied to
+    /// the transcript before LLM enhancement to fix speech-to-text mishearings of names,
+    /// acronyms and jargon (e.g. <c>Marco</c> → <c>Marko</c>). Also surfaced to prompts via the
+    /// <c>{{ReplacementDictionary}}</c> variable.
+    /// </summary>
+    public List<ReplacementRule> Replacements { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the per-application prompt-mode rules (consumed in M6). Evaluated in order
     /// against the foreground process name captured at record-start; the first match wins and
     /// no match falls back to <see cref="ActivePromptMode"/>.

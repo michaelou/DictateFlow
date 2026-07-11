@@ -11,7 +11,7 @@
     <Company>Andreas Michaelou</Company>
     <Authors>Andreas Michaelou</Authors>
     <!-- Default dev version; scripts/release.ps1 overrides it with -p:Version=<release version>. -->
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <!-- Keep the informational version equal to <Version> (no +commit-hash suffix) so the
          version shown in Settings › Diagnostics and used by the update check is clean. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
@@ -28,6 +28,7 @@
     <ProjectReference Include="..\DictateFlow.Providers.AzureSpeech\DictateFlow.Providers.AzureSpeech.csproj" />
     <ProjectReference Include="..\..\samples\DictateFlow.Samples.NullOutput\DictateFlow.Samples.NullOutput.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.Ollama\DictateFlow.Providers.Ollama.csproj" />
+    <ProjectReference Include="..\DictateFlow.Providers.OpenRouter\DictateFlow.Providers.OpenRouter.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.Parakeet\DictateFlow.Providers.Parakeet.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.WhisperCpp\DictateFlow.Providers.WhisperCpp.csproj" />
   </ItemGroup>

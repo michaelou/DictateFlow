@@ -12,6 +12,7 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Providers;
+using DictateFlow.Core.Services.Replacements;
 using DictateFlow.Core.Services.Startup;
 using DictateFlow.Core.Services.Transcription;
 using DictateFlow.Core.Services.Transfer;
@@ -22,6 +23,7 @@ using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.OpenRouter;
 using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
@@ -110,6 +112,10 @@ public static class ServiceCollectionExtensions
         services.AddAzureFoundryLlm();
         services.AddAnthropicLlm();
         services.AddOllamaLlm();
+        // OpenRouter (issue #34): one LLM provider (OpenAI-compatible chat completions) and one
+        // transcription provider (audio sent as multimodal input to an audio-capable model).
+        services.AddOpenRouterLlm();
+        services.AddOpenRouterTranscription();
 
         // Local whisper.cpp: model manager (downloads/verifies the engine and models) plus
         // its download HTTP client; the provider itself is registered below like any other.
@@ -137,12 +143,18 @@ public static class ServiceCollectionExtensions
         // installation state per call, like WhisperCpp.
         services.AddTranscriptionProvider<ParakeetTranscriptionProvider>(
             ParakeetProviders.RegistrationName, requiresConnection: false);
+        // OpenRouter transcription self-validates its key/model per call (it has no
+        // Endpoint/DeploymentName connection shape), so it registers with requiresConnection: false.
+        services.AddTranscriptionProvider<OpenRouterTranscriptionProvider>(
+            OpenRouterProviders.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<MockLLMProvider>(MockLLMProvider.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<AzureFoundryLLMProvider>(AzureFoundryProviders.RegistrationName);
         // Anthropic and Ollama validate their key/URL themselves per call — the generic
         // Endpoint/DeploymentName connection validation does not fit either of them.
         services.AddLLMProvider<AnthropicLLMProvider>(AnthropicProviders.RegistrationName, requiresConnection: false);
         services.AddLLMProvider<OllamaLLMProvider>(OllamaProviders.RegistrationName, requiresConnection: false);
+        // OpenRouter LLM self-validates its key/model per call, like Anthropic and Ollama.
+        services.AddLLMProvider<OpenRouterLLMProvider>(OpenRouterProviders.RegistrationName, requiresConnection: false);
         services.AddOutputProvider<ClipboardPasteOutputProvider>(OutputProviderNames.ClipboardPaste);
         services.AddOutputProvider<SimulatedKeyboardOutputProvider>(OutputProviderNames.SimulatedKeyboard);
         // The sample provider proving the extensibility claim: this line is its entire integration.
@@ -166,6 +178,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPromptModeStore, PromptModeStore>();
         services.AddSingleton<IPromptResolver, PromptResolver>();
         services.AddSingleton<IPromptModeSelector, PromptModeSelector>();
+
+        // Replacement dictionary (issue #35): deterministic transcript corrections applied by
+        // the pipeline before enhancement. Rules live in AppSettings and are read per call.
+        services.AddSingleton<ITextReplacementService, TextReplacementService>();
 
         // Voice command framework (issue #26): the deterministic command branch of the
         // pipeline. Action types register like providers — one AddCommandAction line each;

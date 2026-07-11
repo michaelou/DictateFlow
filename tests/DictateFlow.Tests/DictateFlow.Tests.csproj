@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\DictateFlow.Providers.AzureFoundry\DictateFlow.Providers.AzureFoundry.csproj" />
     <ProjectReference Include="..\..\src\DictateFlow.Providers.AzureSpeech\DictateFlow.Providers.AzureSpeech.csproj" />
     <ProjectReference Include="..\..\src\DictateFlow.Providers.Ollama\DictateFlow.Providers.Ollama.csproj" />
+    <ProjectReference Include="..\..\src\DictateFlow.Providers.OpenRouter\DictateFlow.Providers.OpenRouter.csproj" />
     <ProjectReference Include="..\..\src\DictateFlow.Providers.Parakeet\DictateFlow.Providers.Parakeet.csproj" />
     <ProjectReference Include="..\..\src\DictateFlow.Providers.WhisperCpp\DictateFlow.Providers.WhisperCpp.csproj" />
   </ItemGroup>

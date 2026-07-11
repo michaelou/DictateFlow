@@ -300,6 +300,55 @@
                                    Text="Applies to whole-capture transcription only; streaming sessions last as long as the recording." />
                     </StackPanel>
 
+                    <!-- OpenRouter config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedSpeechProvider}" Value="OpenRouter">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="OpenRouter has no dedicated speech-to-text endpoint, so audio is sent to an audio-capable chat model to transcribe. The model must accept audio input (e.g. google/gemini-2.5-flash, openai/gpt-4o-audio-preview)." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding OpenRouterSpeechApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Model" />
+                        <TextBox Width="240"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterSpeechModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Language (optional)" />
+                        <TextBox Width="200"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterSpeechLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Width="340"
+                                   HorizontalAlignment="Left"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="A BCP-47 tag such as en-US, added as a hint to the transcription instruction; leave empty to let the model detect the language." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterSpeechTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
                     <!-- Mock config section -->
                     <StackPanel>
                         <StackPanel.Style>
@@ -773,6 +822,65 @@
                                  Text="{Binding OllamaTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
+                    <!-- OpenRouter config section -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedLlmProvider}" Value="OpenRouter">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="One API key for models from many providers, routed through OpenRouter. Get a key at openrouter.ai/keys and pick a model slug from openrouter.ai/models (e.g. openai/gpt-4o-mini, anthropic/claude-sonnet-4)." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="API key" />
+                        <PasswordBox Width="340"
+                                     HorizontalAlignment="Left"
+                                     controls:PasswordBoxHelper.BoundPassword="{Binding OpenRouterApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Model" />
+                        <TextBox Width="240"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Temperature (0–2)" />
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="220"
+                                    VerticalAlignment="Center"
+                                    Minimum="0"
+                                    Maximum="2"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding OpenRouterTemperature}" />
+                            <TextBox Width="60"
+                                     Margin="8,0,0,0"
+                                     Text="{Binding OpenRouterTemperature, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="Default for modes without their own temperature. Reasoning models that fix the temperature are handled automatically." />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Max tokens" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterMaxTokens, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Timeout (seconds)" />
+                        <TextBox Width="80"
+                                 HorizontalAlignment="Left"
+                                 Text="{Binding OpenRouterTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
                     <!-- Mock config section -->
                     <StackPanel>
                         <StackPanel.Style>
@@ -1243,6 +1351,78 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="{StaticResource ErrorBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Replacements (find-and-replace dictionary) page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Replacements">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Replacement dictionary" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Fix words the speech engine reliably mishears — names, acronyms and jargon. Each rule rewrites every match in the transcript before AI enhancement (e.g. Marco → Marko), so corrections apply even with the LLM off." />
+
+                    <Button Width="120"
+                            Margin="0,12,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Add replacement"
+                            Command="{Binding AddReplacementRuleCommand}" />
+
+                    <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding ReplacementRules}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,0,0,8" MaxWidth="560" HorizontalAlignment="Left">
+                                    <Button DockPanel.Dock="Right"
+                                            Width="66"
+                                            VerticalAlignment="Center"
+                                            Content="Remove"
+                                            Command="{Binding DataContext.RemoveReplacementRuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBox Width="180"
+                                                     VerticalContentAlignment="Center"
+                                                     Text="{Binding From, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Margin="8,0,8,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="→" />
+                                            <TextBox Width="180"
+                                                     VerticalContentAlignment="Center"
+                                                     Text="{Binding To, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                            <CheckBox Content="Whole word" IsChecked="{Binding WholeWord}" />
+                                            <CheckBox Margin="16,0,0,0" Content="Case-sensitive" IsChecked="{Binding CaseSensitive}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Prompt modes can reference the pairs via the {{ReplacementDictionary}} variable so enhancement will not reverse them." />
 
                     <TextBlock Margin="0,12,0,0"
                                Foreground="{StaticResource ErrorBrush}"

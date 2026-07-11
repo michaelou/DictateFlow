@@ -18,6 +18,7 @@ using DictateFlow.Providers.Anthropic;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.Ollama;
+using DictateFlow.Providers.OpenRouter;
 using DictateFlow.Providers.Parakeet;
 using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
@@ -94,10 +95,10 @@ public sealed class ServiceRegistrationTests : IDisposable
         var registry = provider.GetRequiredService<IProviderRegistry>();
 
         Assert.Equal(
-            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AzureSpeechProviders.RegistrationName, WhisperCppProviders.RegistrationName, ParakeetProviders.RegistrationName],
+            [MockTranscriptionProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AzureSpeechProviders.RegistrationName, WhisperCppProviders.RegistrationName, ParakeetProviders.RegistrationName, OpenRouterProviders.RegistrationName],
             registry.GetNames(ProviderKind.Transcription));
         Assert.Equal(
-            [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AnthropicProviders.RegistrationName, OllamaProviders.RegistrationName],
+            [MockLLMProvider.RegistrationName, AzureFoundryProviders.RegistrationName, AnthropicProviders.RegistrationName, OllamaProviders.RegistrationName, OpenRouterProviders.RegistrationName],
             registry.GetNames(ProviderKind.Llm));
         Assert.Equal(
             [OutputProviderNames.ClipboardPaste, OutputProviderNames.SimulatedKeyboard, NullOutputProvider.RegistrationName],

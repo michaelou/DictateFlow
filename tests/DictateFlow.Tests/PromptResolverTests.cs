@@ -96,6 +96,34 @@ public sealed class PromptResolverTests
     }
 
     [Fact]
+    public void Resolve_ReplacementDictionary_SubstitutesFromToPairs()
+    {
+        _appSettings.Replacements =
+        [
+            new ReplacementRule { From = "Marco", To = "Marko" },
+            new ReplacementRule { From = "kubectl", To = "kube control" },
+        ];
+        SetupMode("Email", "[{{ReplacementDictionary}}]");
+        var resolver = CreateResolver();
+
+        var context = resolver.Resolve("x", "Email");
+
+        Assert.Equal("[Marco → Marko, kubectl → kube control]", context.SystemPrompt);
+    }
+
+    [Fact]
+    public void Resolve_EmptyReplacementDictionary_SubstitutesEmptyString()
+    {
+        _appSettings.Replacements = [];
+        SetupMode("Email", "[{{ReplacementDictionary}}]");
+        var resolver = CreateResolver();
+
+        var context = resolver.Resolve("x", "Email");
+
+        Assert.Equal("[]", context.SystemPrompt);
+    }
+
+    [Fact]
     public void Resolve_UnknownMode_FallsBackToRaw()
     {
         _store.Setup(s => s.GetByName("Nope")).Returns((PromptMode?)null);

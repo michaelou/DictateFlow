@@ -7,6 +7,7 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Pipeline;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Providers;
+using DictateFlow.Core.Services.Replacements;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,6 +24,7 @@ public sealed class DictationPipelineTests
 {
     private readonly Mock<ITranscriptionProvider> _transcription = new();
     private readonly Mock<IVoiceCommandService> _voiceCommands = new();
+    private readonly Mock<ITextReplacementService> _textReplacement = new();
     private readonly Mock<IPromptModeSelector> _modeSelector = new();
     private readonly Mock<IPromptResolver> _resolver = new();
     private readonly Mock<ILLMProvider> _llm = new();
@@ -40,6 +42,8 @@ public sealed class DictationPipelineTests
         // Default voice command behavior mirrors a normal dictation: not a command.
         _voiceCommands.Setup(v => v.TryHandleAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((CommandOutcome?)null);
+        // Default replacement behavior: no rules configured, so the transcript passes through.
+        _textReplacement.Setup(r => r.Apply(It.IsAny<string>())).Returns<string>(text => text);
         // Default selector behavior mirrors the no-rule fallback: the active mode from settings.
         _modeSelector.Setup(s => s.SelectMode(It.IsAny<string>()))
             .Returns(() => _appSettings.ActivePromptMode);
@@ -65,12 +69,27 @@ public sealed class DictationPipelineTests
     }
 
     private DictationPipeline CreatePipeline()
-        => new(_transcription.Object, _voiceCommands.Object, _modeSelector.Object, _resolver.Object, _llm.Object,
-            _history.Object, _output.Object, _gate.Object, TimeProvider.System,
+        => new(_transcription.Object, _voiceCommands.Object, _textReplacement.Object, _modeSelector.Object,
+            _resolver.Object, _llm.Object, _history.Object, _output.Object, _gate.Object, TimeProvider.System,
             Mock.Of<ILogger<DictationPipeline>>());
 
     private static PipelineRequest CreateRequest()
         => new(new MemoryStream(new byte[44 + 32000]), "notepad", 1234);
+
+    [Fact]
+    public async Task RunAsync_AppliesReplacementDictionaryBeforeEnhancement()
+    {
+        // The replacement service corrects the transcript; enhancement and output must see the
+        // corrected text, not the raw one.
+        _textReplacement.Setup(r => r.Apply("raw transcript")).Returns("corrected transcript");
+
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("[enhanced] corrected transcript", result.FinalText);
+        _resolver.Verify(r => r.Resolve("corrected transcript", It.IsAny<string>()), Times.Once);
+        _output.Verify(o => o.OutputAsync("[enhanced] corrected transcript"), Times.Once);
+    }
 
     [Fact]
     public async Task RunAsync_StreamedTranscript_SkipsTranscriptionAndUsesTheSuppliedText()
@@ -430,9 +449,10 @@ public sealed class DictationPipelineTests
         var history = new SqliteHistoryRepository(paths, _settings.Object, NullLogger<SqliteHistoryRepository>.Instance);
         var modeSelector = new PromptModeSelector(_settings.Object, NullLogger<PromptModeSelector>.Instance);
 
+        var textReplacement = new TextReplacementService(_settings.Object, NullLogger<TextReplacementService>.Instance);
         var pipeline = new DictationPipeline(
-            speech, _voiceCommands.Object, modeSelector, resolver, llm, history, _output.Object, _gate.Object,
-            TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
+            speech, _voiceCommands.Object, textReplacement, modeSelector, resolver, llm, history, _output.Object,
+            _gate.Object, TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
         var result = await pipeline.RunAsync(CreateRequest(), CancellationToken.None);
 
