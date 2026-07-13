@@ -102,8 +102,49 @@ public sealed class DatabaseInitializerTests : IDisposable
 
         var columns = await GetColumnNamesAsync("UsageRecords");
         Assert.Equal(
-            ["Id", "TimestampUtc", "Category", "Requests", "DurationSeconds", "PromptTokens", "CompletionTokens", "EstimatedCost"],
+            ["Id", "TimestampUtc", "Category", "Requests", "DurationSeconds", "PromptTokens", "CompletionTokens", "WordCount", "EstimatedCost"],
             columns);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_MigratesLegacyUsageRecordsTableWithoutWordCount()
+    {
+        // Seed a pre-existing database shaped like an older release: UsageRecords without the
+        // WordCount column, with a row already present.
+        await using (var connection = new SqliteConnection($"Data Source={_paths.DatabaseFilePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                CREATE TABLE UsageRecords (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    TimestampUtc TEXT NOT NULL,
+                    Category TEXT NOT NULL,
+                    Requests INTEGER NOT NULL DEFAULT 1,
+                    DurationSeconds REAL NULL,
+                    PromptTokens INTEGER NULL,
+                    CompletionTokens INTEGER NULL,
+                    EstimatedCost REAL NOT NULL DEFAULT 0
+                );
+                INSERT INTO UsageRecords (TimestampUtc, Category, DurationSeconds, EstimatedCost)
+                VALUES ('2020-01-01T00:00:00.0000000Z', 'Speech', 60, 0.006);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        SqliteConnection.ClearAllPools();
+
+        await _initializer.InitializeAsync();
+
+        var columns = await GetColumnNamesAsync("UsageRecords");
+        Assert.Contains("WordCount", columns);
+
+        // The migration must preserve the existing row (ALTER TABLE ADD COLUMN, not a rebuild).
+        await using var verify = new SqliteConnection($"Data Source={_paths.DatabaseFilePath}");
+        await verify.OpenAsync();
+        await using var count = verify.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM UsageRecords WHERE Category = 'Speech';";
+        Assert.Equal(1L, Convert.ToInt64(await count.ExecuteScalarAsync()));
     }
 
     private async Task<List<string>> GetTableNamesAsync()

@@ -65,7 +65,7 @@ public sealed class SqliteCostService : ICostService
 
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT TimestampUtc, Category, DurationSeconds, PromptTokens, CompletionTokens, EstimatedCost FROM UsageRecords;";
+            "SELECT TimestampUtc, Category, DurationSeconds, PromptTokens, CompletionTokens, WordCount, EstimatedCost FROM UsageRecords;";
 
         var today = new PeriodAccumulator();
         var thisMonth = new PeriodAccumulator();
@@ -82,17 +82,18 @@ public sealed class SqliteCostService : ICostService
             var duration = reader.IsDBNull(2) ? 0 : reader.GetDouble(2);
             var promptTokens = reader.IsDBNull(3) ? 0 : reader.GetInt64(3);
             var completionTokens = reader.IsDBNull(4) ? 0 : reader.GetInt64(4);
-            var cost = reader.GetDouble(5);
+            var words = reader.IsDBNull(5) ? 0 : reader.GetInt64(5);
+            var cost = reader.GetDouble(6);
 
-            lifetime.Add(category, duration, promptTokens, completionTokens, cost);
+            lifetime.Add(category, duration, promptTokens, completionTokens, words, cost);
             if (timestampUtc >= monthStartUtc)
             {
-                thisMonth.Add(category, duration, promptTokens, completionTokens, cost);
+                thisMonth.Add(category, duration, promptTokens, completionTokens, words, cost);
             }
 
             if (timestampUtc >= dayStartUtc)
             {
-                today.Add(category, duration, promptTokens, completionTokens, cost);
+                today.Add(category, duration, promptTokens, completionTokens, words, cost);
             }
         }
 
@@ -110,8 +111,9 @@ public sealed class SqliteCostService : ICostService
         private long _promptTokens;
         private long _completionTokens;
         private double _llmCost;
+        private long _words;
 
-        public void Add(string category, double durationSeconds, long promptTokens, long completionTokens, double cost)
+        public void Add(string category, double durationSeconds, long promptTokens, long completionTokens, long words, double cost)
         {
             if (string.Equals(category, UsageCategories.Speech, StringComparison.OrdinalIgnoreCase))
             {
@@ -126,10 +128,14 @@ public sealed class SqliteCostService : ICostService
                 _completionTokens += completionTokens;
                 _llmCost += cost;
             }
+            else if (string.Equals(category, UsageCategories.Dictation, StringComparison.OrdinalIgnoreCase))
+            {
+                _words += words;
+            }
         }
 
         public CostPeriod ToPeriod()
             => new(_speechRequests, _speechSeconds / 60.0, _speechCost,
-                _llmRequests, _promptTokens, _completionTokens, _llmCost);
+                _llmRequests, _promptTokens, _completionTokens, _llmCost, _words);
     }
 }

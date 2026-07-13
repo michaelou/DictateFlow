@@ -16,6 +16,7 @@ public sealed class CostPeriodItem
     public CostPeriodItem(string title, CostPeriod period, string currency)
     {
         Title = title;
+        Words = period.Words.ToString("N0");
         SpeechRequests = period.SpeechRequests.ToString("N0");
         SpeechMinutes = period.SpeechMinutes.ToString("N1");
         SpeechCost = FormatCost(period.SpeechCost, currency);
@@ -28,6 +29,9 @@ public sealed class CostPeriodItem
 
     /// <summary>Gets the card heading.</summary>
     public string Title { get; }
+
+    /// <summary>Gets the number of raw dictated words.</summary>
+    public string Words { get; }
 
     /// <summary>Gets the number of speech calls.</summary>
     public string SpeechRequests { get; }

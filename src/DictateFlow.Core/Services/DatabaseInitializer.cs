@@ -27,6 +27,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             DurationSeconds REAL NULL,
             PromptTokens INTEGER NULL,
             CompletionTokens INTEGER NULL,
+            WordCount INTEGER NULL,
             EstimatedCost REAL NOT NULL DEFAULT 0
         );
         """;
@@ -69,6 +70,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await EnsureColumnAsync(connection, "History", "RawTranscript", "TEXT NULL", cancellationToken)
             .ConfigureAwait(false);
         await EnsureColumnAsync(connection, "History", "PromptModeName", "TEXT NULL", cancellationToken)
+            .ConfigureAwait(false);
+        await EnsureColumnAsync(connection, "UsageRecords", "WordCount", "INTEGER NULL", cancellationToken)
             .ConfigureAwait(false);
 
         _logger.LogInformation("Database initialized at {Path}", path);

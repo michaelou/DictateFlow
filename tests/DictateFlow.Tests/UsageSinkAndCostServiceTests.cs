@@ -43,6 +43,9 @@ public sealed class UsageSinkAndCostServiceTests : IDisposable
     private static UsageRecord LlmRecord(DateTime timestampUtc, int promptTokens, int completionTokens)
         => new(timestampUtc, UsageCategories.Llm, null, promptTokens, completionTokens);
 
+    private static UsageRecord DictationRecord(DateTime timestampUtc, int wordCount)
+        => new(timestampUtc, UsageCategories.Dictation, null, null, null, wordCount);
+
     [Fact]
     public void Record_SpeechCall_CostIsMinutesTimesRate()
     {
@@ -134,6 +137,41 @@ public sealed class UsageSinkAndCostServiceTests : IDisposable
     }
 
     [Fact]
+    public void Record_DictationCall_StoresWordCountWithZeroCost()
+    {
+        _appSettings.Pricing.SpeechPerMinute = 0.006;
+
+        _sink.Record(DictationRecord(_time.UtcNow.UtcDateTime, wordCount: 42));
+
+        var row = Assert.Single(ReadUsageRows());
+        Assert.Equal(UsageCategories.Dictation, row.Category);
+        Assert.Equal(42, row.WordCount);
+        Assert.Equal(0, row.EstimatedCost, precision: 10);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_AggregatesDictatedWords()
+    {
+        // Clock pinned to 2026-07-02 12:00 UTC with a UTC local zone.
+        var today = new DateTime(2026, 7, 2, 8, 0, 0, DateTimeKind.Utc);
+        var yesterday = new DateTime(2026, 7, 1, 23, 0, 0, DateTimeKind.Utc);
+        var lastMonth = new DateTime(2026, 6, 30, 23, 0, 0, DateTimeKind.Utc);
+        _sink.Record(DictationRecord(today, wordCount: 10));
+        _sink.Record(DictationRecord(yesterday, wordCount: 5));
+        _sink.Record(DictationRecord(lastMonth, wordCount: 100));
+
+        var summary = await _costService.GetSummaryAsync();
+
+        Assert.Equal(10, summary.Today.Words);
+        Assert.Equal(15, summary.ThisMonth.Words);
+        Assert.Equal(115, summary.Lifetime.Words);
+        // Words carry no cost and are not counted as speech/LLM calls.
+        Assert.Equal(0, summary.Lifetime.TotalCost, precision: 10);
+        Assert.Equal(0, summary.Lifetime.SpeechRequests);
+        Assert.Equal(0, summary.Lifetime.LlmRequests);
+    }
+
+    [Fact]
     public async Task GetSummaryAsync_DayAndMonthBoundaries_GroupCorrectly()
     {
         // Clock pinned to 2026-07-02 12:00 UTC with a UTC local zone.
@@ -183,18 +221,22 @@ public sealed class UsageSinkAndCostServiceTests : IDisposable
     }
 
     /// <summary>Reads all UsageRecords rows straight from the database file (Id order).</summary>
-    private List<(string Category, double? DurationSeconds, double EstimatedCost)> ReadUsageRows()
+    private List<(string Category, double? DurationSeconds, int? WordCount, double EstimatedCost)> ReadUsageRows()
     {
         using var connection = new SqliteConnection($"Data Source={_paths.DatabaseFilePath}");
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Category, DurationSeconds, EstimatedCost FROM UsageRecords ORDER BY Id;";
+        command.CommandText = "SELECT Category, DurationSeconds, WordCount, EstimatedCost FROM UsageRecords ORDER BY Id;";
         using var reader = command.ExecuteReader();
 
-        var rows = new List<(string, double?, double)>();
+        var rows = new List<(string, double?, int?, double)>();
         while (reader.Read())
         {
-            rows.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetDouble(1), reader.GetDouble(2)));
+            rows.Add((
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetDouble(1),
+                reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                reader.GetDouble(3)));
         }
 
         return rows;

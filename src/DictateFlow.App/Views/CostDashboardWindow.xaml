@@ -2,11 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="{DynamicResource WindowBackgroundBrush}"
-        Title="DictateFlow Cost Dashboard"
+        Title="DictateFlow Usage &amp; Cost"
         Width="720"
-        Height="380"
+        Height="430"
         MinWidth="560"
-        MinHeight="300"
+        MinHeight="340"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="8">
         <Grid.RowDefinitions>
@@ -23,7 +23,7 @@
             <TextBlock VerticalAlignment="Center"
                        FontSize="16"
                        FontWeight="SemiBold"
-                       Text="Estimated usage costs" />
+                       Text="Usage &amp; estimated cost" />
         </DockPanel>
 
         <!-- Today / This month / Lifetime cards -->
@@ -51,28 +51,34 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,0,2" FontWeight="SemiBold" Text="Speech" />
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Requests" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechRequests}" />
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Minutes" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechMinutes}" />
-                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechCost}" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,0,2" FontWeight="SemiBold" Text="Dictation" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,8,0" Text="Words dictated" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding Words}" />
 
-                            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,0,2" FontWeight="SemiBold" Text="LLM" />
-                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Requests" />
-                            <TextBlock Grid.Row="5" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmRequests}" />
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Prompt / completion tokens" />
-                            <TextBlock Grid.Row="6" Grid.Column="1" HorizontalAlignment="Right">
+                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,0,2" FontWeight="SemiBold" Text="Speech" />
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Requests" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechRequests}" />
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Minutes" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechMinutes}" />
+                            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding SpeechCost}" />
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,0,2" FontWeight="SemiBold" Text="LLM" />
+                            <TextBlock Grid.Row="7" Grid.Column="0" Text="Requests" />
+                            <TextBlock Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmRequests}" />
+                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Prompt / completion tokens" />
+                            <TextBlock Grid.Row="8" Grid.Column="1" HorizontalAlignment="Right">
                                 <Run Text="{Binding PromptTokens, Mode=OneWay}" /><Run Text=" / " /><Run Text="{Binding CompletionTokens, Mode=OneWay}" />
                             </TextBlock>
-                            <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
-                            <TextBlock Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmCost}" />
+                            <TextBlock Grid.Row="9" Grid.Column="0" Margin="0,0,8,0" Text="Cost" />
+                            <TextBlock Grid.Row="9" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding LlmCost}" />
 
-                            <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,8,0,0" FontWeight="SemiBold" Text="Total" />
-                            <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,8,0,0" HorizontalAlignment="Right" FontWeight="SemiBold" Text="{Binding TotalCost}" />
+                            <TextBlock Grid.Row="10" Grid.Column="0" Margin="0,8,0,0" FontWeight="SemiBold" Text="Total cost" />
+                            <TextBlock Grid.Row="10" Grid.Column="1" Margin="0,8,0,0" HorizontalAlignment="Right" FontWeight="SemiBold" Text="{Binding TotalCost}" />
                         </Grid>
                     </GroupBox>
                 </DataTemplate>

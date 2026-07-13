@@ -7,6 +7,8 @@ using DictateFlow.Core.Services.Output;
 using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Replacements;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Services.Usage;
+using DictateFlow.Core.Text;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Core.Services.Pipeline;
@@ -40,6 +42,7 @@ public sealed class DictationPipeline : IDictationPipeline
     private readonly IHistoryRepository _historyRepository;
     private readonly IOutputProvider _outputProvider;
     private readonly IOutputGate _outputGate;
+    private readonly IUsageSink _usageSink;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DictationPipeline> _logger;
 
@@ -53,6 +56,7 @@ public sealed class DictationPipeline : IDictationPipeline
     /// <param name="historyRepository">Persists the confirmed final text.</param>
     /// <param name="outputProvider">Delivers the confirmed text.</param>
     /// <param name="outputGate">Confirms (and possibly edits) the draft before delivery.</param>
+    /// <param name="usageSink">Records the count of dictated words per delivered dictation.</param>
     /// <param name="timeProvider">Supplies the history timestamp (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public DictationPipeline(
@@ -65,6 +69,7 @@ public sealed class DictationPipeline : IDictationPipeline
         IHistoryRepository historyRepository,
         IOutputProvider outputProvider,
         IOutputGate outputGate,
+        IUsageSink usageSink,
         TimeProvider timeProvider,
         ILogger<DictationPipeline> logger)
     {
@@ -77,6 +82,7 @@ public sealed class DictationPipeline : IDictationPipeline
         _historyRepository = historyRepository;
         _outputProvider = outputProvider;
         _outputGate = outputGate;
+        _usageSink = usageSink;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -204,6 +210,17 @@ public sealed class DictationPipeline : IDictationPipeline
             // History is best-effort: never fail a dictation over a bookkeeping write.
             _logger.LogError(ex, "History write failed; continuing with output");
         }
+
+        // 5.5 Usage — record the raw dictated word count for the metrics, only for text actually
+        //     delivered. Uses the corrected raw transcript (not the enhanced output) so the figure
+        //     reflects words spoken. The sink swallows its own failures, so this never fails a run.
+        _usageSink.Record(new UsageRecord(
+            _timeProvider.GetUtcNow().UtcDateTime,
+            UsageCategories.Dictation,
+            DurationSeconds: null,
+            PromptTokens: null,
+            CompletionTokens: null,
+            WordCount: WordCounter.CountWords(transcript)));
 
         // 6. Output. The injected provider is the registry-backed default, which selects the
         //    active provider from settings per call — changes apply live.

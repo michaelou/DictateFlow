@@ -52,8 +52,8 @@ public sealed class SqliteUsageSink : IUsageSink
             command.CommandText =
                 """
                 INSERT INTO UsageRecords
-                    (TimestampUtc, Category, Requests, DurationSeconds, PromptTokens, CompletionTokens, EstimatedCost)
-                VALUES ($timestamp, $category, 1, $duration, $promptTokens, $completionTokens, $cost);
+                    (TimestampUtc, Category, Requests, DurationSeconds, PromptTokens, CompletionTokens, WordCount, EstimatedCost)
+                VALUES ($timestamp, $category, 1, $duration, $promptTokens, $completionTokens, $wordCount, $cost);
                 """;
             command.Parameters.AddWithValue("$timestamp",
                 DateTime.SpecifyKind(record.TimestampUtc, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture));
@@ -61,12 +61,13 @@ public sealed class SqliteUsageSink : IUsageSink
             command.Parameters.AddWithValue("$duration", (object?)record.DurationSeconds ?? DBNull.Value);
             command.Parameters.AddWithValue("$promptTokens", (object?)record.PromptTokens ?? DBNull.Value);
             command.Parameters.AddWithValue("$completionTokens", (object?)record.CompletionTokens ?? DBNull.Value);
+            command.Parameters.AddWithValue("$wordCount", (object?)record.WordCount ?? DBNull.Value);
             command.Parameters.AddWithValue("$cost", estimatedCost);
             command.ExecuteNonQuery();
 
             _logger.LogDebug(
-                "Usage recorded: {Category}, {DurationSeconds:F1} s, {PromptTokens}+{CompletionTokens} tokens, estimated cost {EstimatedCost:F6}",
-                record.Category, record.DurationSeconds, record.PromptTokens, record.CompletionTokens, estimatedCost);
+                "Usage recorded: {Category}, {DurationSeconds:F1} s, {PromptTokens}+{CompletionTokens} tokens, {WordCount} words, estimated cost {EstimatedCost:F6}",
+                record.Category, record.DurationSeconds, record.PromptTokens, record.CompletionTokens, record.WordCount, estimatedCost);
         }
         catch (Exception ex)
         {

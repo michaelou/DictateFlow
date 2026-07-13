@@ -10,6 +10,7 @@ namespace DictateFlow.Core.Models;
 /// <param name="PromptTokens">Total prompt tokens sent.</param>
 /// <param name="CompletionTokens">Total completion tokens received.</param>
 /// <param name="LlmCost">Estimated cost of the LLM calls.</param>
+/// <param name="Words">Total raw dictated words across delivered dictations. Not a cost.</param>
 public sealed record CostPeriod(
     int SpeechRequests,
     double SpeechMinutes,
@@ -17,10 +18,11 @@ public sealed record CostPeriod(
     int LlmRequests,
     long PromptTokens,
     long CompletionTokens,
-    double LlmCost)
+    double LlmCost,
+    long Words)
 {
     /// <summary>An all-zero period, used before any usage exists.</summary>
-    public static CostPeriod Empty { get; } = new(0, 0, 0, 0, 0, 0, 0);
+    public static CostPeriod Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0);
 
     /// <summary>Gets the combined estimated cost of the period.</summary>
     public double TotalCost => SpeechCost + LlmCost;

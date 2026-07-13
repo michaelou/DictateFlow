@@ -33,6 +33,7 @@ public sealed class DictationPipelineTests
     private readonly Mock<IOutputGate> _gate = new();
     private readonly Mock<ISettingsService> _settings = new();
     private readonly AppSettings _appSettings = new();
+    private readonly RecordingUsageSink _usageSink = new();
     private readonly List<string> _callOrder = [];
 
     public DictationPipelineTests()
@@ -70,8 +71,8 @@ public sealed class DictationPipelineTests
 
     private DictationPipeline CreatePipeline()
         => new(_transcription.Object, _voiceCommands.Object, _textReplacement.Object, _modeSelector.Object,
-            _resolver.Object, _llm.Object, _history.Object, _output.Object, _gate.Object, TimeProvider.System,
-            Mock.Of<ILogger<DictationPipeline>>());
+            _resolver.Object, _llm.Object, _history.Object, _output.Object, _gate.Object, _usageSink,
+            TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
     private static PipelineRequest CreateRequest()
         => new(new MemoryStream(new byte[44 + 32000]), "notepad", 1234);
@@ -310,6 +311,44 @@ public sealed class DictationPipelineTests
     }
 
     [Fact]
+    public async Task RunAsync_DeliveredDictation_RecordsRawDictatedWordCount()
+    {
+        // Enhancement rewrites the text, but the recorded count reflects the raw two-word
+        // transcript ("raw transcript"), not the enhanced output.
+        var result = await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        var record = Assert.Single(_usageSink.Records, r => r.Category == UsageCategories.Dictation);
+        Assert.Equal(2, record.WordCount);
+        Assert.Null(record.DurationSeconds);
+        Assert.Null(record.PromptTokens);
+    }
+
+    [Fact]
+    public async Task RunAsync_WordCountUsesCorrectedTranscript()
+    {
+        // The replacement dictionary changes the transcript before enhancement; the word count
+        // measures the corrected text that the user effectively dictated.
+        _textReplacement.Setup(r => r.Apply("raw transcript")).Returns("one two three four");
+
+        await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        var record = Assert.Single(_usageSink.Records, r => r.Category == UsageCategories.Dictation);
+        Assert.Equal(4, record.WordCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_GateReturnsNull_RecordsNoWordCount()
+    {
+        _gate.Setup(g => g.ConfirmAsync(It.IsAny<PipelineResult>())).ReturnsAsync((string?)null);
+
+        await CreatePipeline().RunAsync(CreateRequest(), CancellationToken.None);
+
+        // A cancelled dictation is never delivered, so no word count is recorded.
+        Assert.DoesNotContain(_usageSink.Records, r => r.Category == UsageCategories.Dictation);
+    }
+
+    [Fact]
     public async Task RunAsync_GateThrows_BecomesFailedResult()
     {
         _gate.Setup(g => g.ConfirmAsync(It.IsAny<PipelineResult>()))
@@ -452,7 +491,7 @@ public sealed class DictationPipelineTests
         var textReplacement = new TextReplacementService(_settings.Object, NullLogger<TextReplacementService>.Instance);
         var pipeline = new DictationPipeline(
             speech, _voiceCommands.Object, textReplacement, modeSelector, resolver, llm, history, _output.Object,
-            _gate.Object, TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
+            _gate.Object, _usageSink, TimeProvider.System, Mock.Of<ILogger<DictationPipeline>>());
 
         var result = await pipeline.RunAsync(CreateRequest(), CancellationToken.None);
 

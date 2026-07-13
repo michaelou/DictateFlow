@@ -10,12 +10,14 @@ namespace DictateFlow.Core.Models;
 /// <param name="DurationSeconds">Audio duration for transcription calls; <see langword="null"/> for token-billed calls.</param>
 /// <param name="PromptTokens">Prompt tokens for LLM calls; <see langword="null"/> for duration-billed calls.</param>
 /// <param name="CompletionTokens">Completion tokens for LLM calls; <see langword="null"/> for duration-billed calls.</param>
+/// <param name="WordCount">Words dictated for a <see cref="UsageCategories.Dictation"/> record; <see langword="null"/> for billed calls.</param>
 public sealed record UsageRecord(
     DateTime TimestampUtc,
     string Category,
     double? DurationSeconds,
     int? PromptTokens,
-    int? CompletionTokens);
+    int? CompletionTokens,
+    int? WordCount = null);
 
 /// <summary>Well-known <see cref="UsageRecord.Category"/> values (also stored in the <c>Category</c> column).</summary>
 public static class UsageCategories
@@ -25,4 +27,7 @@ public static class UsageCategories
 
     /// <summary>LLM enhancement calls, billed by tokens.</summary>
     public const string Llm = "Llm";
+
+    /// <summary>One delivered dictation, carrying the count of raw dictated words. Not billed.</summary>
+    public const string Dictation = "Dictation";
 }
