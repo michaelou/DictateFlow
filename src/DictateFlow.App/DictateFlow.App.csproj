@@ -46,11 +46,6 @@
 
   <ItemGroup>
     <Resource Include="Resources\appicon.ico" />
-    <Resource Include="Resources\clear.png" />
-    <Resource Include="Resources\copy.png" />
-    <Resource Include="Resources\delete.png" />
-    <Resource Include="Resources\paste.png" />
-    <Resource Include="Resources\refresh.png" />
   </ItemGroup>
 
   <ItemGroup>
