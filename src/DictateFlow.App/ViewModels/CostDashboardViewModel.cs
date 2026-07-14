@@ -16,6 +16,7 @@ public sealed class CostPeriodItem
     public CostPeriodItem(string title, CostPeriod period, string currency)
     {
         Title = title;
+        Currency = currency;
         Words = period.Words.ToString("N0");
         SpeechRequests = period.SpeechRequests.ToString("N0");
         SpeechMinutes = period.SpeechMinutes.ToString("N1");
@@ -25,10 +26,40 @@ public sealed class CostPeriodItem
         CompletionTokens = period.CompletionTokens.ToString("N0");
         LlmCost = FormatCost(period.LlmCost, currency);
         TotalCost = FormatCost(period.TotalCost, currency);
+
+        WordsValue = period.Words;
+        SpeechCostValue = period.SpeechCost;
+        LlmCostValue = period.LlmCost;
+        TotalCostValue = period.TotalCost;
+
+        // Fractions drive the speech-vs-LLM split bar; guard the empty period.
+        SpeechCostFraction = period.TotalCost > 0 ? period.SpeechCost / period.TotalCost : 0;
+        LlmCostFraction = period.TotalCost > 0 ? period.LlmCost / period.TotalCost : 0;
     }
 
     /// <summary>Gets the card heading.</summary>
     public string Title { get; }
+
+    /// <summary>Gets the display currency code.</summary>
+    public string Currency { get; }
+
+    /// <summary>Gets the raw dictated-word count (for the count-up animation).</summary>
+    public double WordsValue { get; }
+
+    /// <summary>Gets the estimated speech cost as a number (for the hero total and split bar).</summary>
+    public double SpeechCostValue { get; }
+
+    /// <summary>Gets the estimated LLM cost as a number (for the hero total and split bar).</summary>
+    public double LlmCostValue { get; }
+
+    /// <summary>Gets the combined estimated cost as a number (for the count-up hero and colour coding).</summary>
+    public double TotalCostValue { get; }
+
+    /// <summary>Gets the speech share of the total cost (0..1), zero when nothing was spent.</summary>
+    public double SpeechCostFraction { get; }
+
+    /// <summary>Gets the LLM share of the total cost (0..1), zero when nothing was spent.</summary>
+    public double LlmCostFraction { get; }
 
     /// <summary>Gets the number of raw dictated words.</summary>
     public string Words { get; }
