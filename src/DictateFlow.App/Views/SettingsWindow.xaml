@@ -19,6 +19,96 @@
         <DataTemplate x:Key="DisplayNameItemTemplate">
             <TextBlock Text="{Binding DisplayName}" />
         </DataTemplate>
+
+        <controls:SectionIconConverter x:Key="SectionIcon" />
+
+        <!-- Base style for a settings page: hidden until its section is selected, and it
+             fades in each time it becomes visible (the per-section DataTrigger that flips
+             Visibility to Visible is added by each page's own BasedOn style). -->
+        <Style x:Key="SectionPage" TargetType="{x:Type StackPanel}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <Trigger Property="IsVisible" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Nav rail item: icon + label with an accent bar that grows in on selection. -->
+        <DataTemplate x:Key="NavItemTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Path Style="{StaticResource FluentIcon}" Width="16" Height="16" Data="{Binding Converter={StaticResource SectionIcon}}" />
+                <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding}" />
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="NavItem" TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Grid Margin="0,1">
+                            <Border x:Name="bg"
+                                    Background="Transparent"
+                                    CornerRadius="{StaticResource ControlCornerRadius}"
+                                    Padding="10,7">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="activebar"
+                                    Width="3"
+                                    Height="18"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="2"
+                                    Background="{StaticResource AccentBrush}"
+                                    Opacity="0"
+                                    RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="barScale" ScaleY="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource ControlHoverBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource SurfaceElevatedHoverBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="barScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.18" />
+                                            <DoubleAnimation Storyboard.TargetName="activebar" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="barScale" Storyboard.TargetProperty="ScaleY" To="0" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="activebar" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Grid Margin="8">
         <Grid.RowDefinitions>
@@ -39,6 +129,10 @@
             </Grid.RowDefinitions>
 
             <ListBox Grid.Row="0"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ItemContainerStyle="{StaticResource NavItem}"
+                     ItemTemplate="{StaticResource NavItemTemplate}"
                      ItemsSource="{Binding Sections}"
                      SelectedItem="{Binding SelectedSection}" />
 
@@ -46,31 +140,45 @@
                 <Separator Margin="0,0,0,4" />
                 <Button Margin="0,2,0,0"
                         HorizontalContentAlignment="Left"
-                        Content="Show History"
-                        Command="{Binding ShowHistoryCommand}" />
+                        Command="{Binding ShowHistoryCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.History}" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Show History" />
+                    </StackPanel>
+                </Button>
                 <Button Margin="0,2,0,0"
                         HorizontalContentAlignment="Left"
-                        Content="Show Cost Dashboard"
-                        Command="{Binding ShowCostDashboardCommand}" />
+                        Command="{Binding ShowCostDashboardCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.Money}" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Show Cost Dashboard" />
+                    </StackPanel>
+                </Button>
                 <Button Margin="0,2,0,0"
                         HorizontalContentAlignment="Left"
-                        Content="Check for Updates…"
-                        Command="{Binding CheckForUpdatesCommand}" />
+                        Command="{Binding CheckForUpdatesCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.Download}" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Check for Updates…" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Grid>
 
         <Border Grid.Row="0"
                 Grid.Column="1"
+                Background="{StaticResource SurfaceElevatedBrush}"
                 BorderBrush="{StaticResource SurfaceBorderBrush}"
                 BorderThickness="1"
-                Padding="16">
+                CornerRadius="{StaticResource CardCornerRadius}"
+                Padding="16"
+                Effect="{StaticResource CardShadow}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <Grid>
                 <!-- General / Recording page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="General">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -168,8 +276,7 @@
                 <!-- Speech (transcription provider) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Speech">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -461,9 +568,9 @@
                                  Text="{Binding ParakeetTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
-                    <Button Width="140"
-                            Margin="0,16,0,0"
+                    <Button Margin="0,16,0,0"
                             HorizontalAlignment="Left"
+                            Style="{StaticResource PrimaryButton}"
                             Content="Test connection"
                             Command="{Binding TestConnectionCommand}" />
                     <TextBlock Margin="0,8,0,0"
@@ -479,8 +586,7 @@
                 <!-- Local Models (whisper.cpp engine and model manager) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Local Models">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -614,8 +720,7 @@
                 <!-- LLM (enhancement provider) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="LLM">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -900,9 +1005,9 @@
                                  Text="{Binding MockLlmDelayMs, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
-                    <Button Width="140"
-                            Margin="0,16,0,0"
+                    <Button Margin="0,16,0,0"
                             HorizontalAlignment="Left"
+                            Style="{StaticResource PrimaryButton}"
                             Content="Test connection"
                             Command="{Binding TestLlmConnectionCommand}" />
                     <TextBlock Margin="0,8,0,0"
@@ -918,8 +1023,7 @@
                 <!-- Prompts page: loaded modes, active-mode selector, and the Prompt Tester -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Prompts">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1057,8 +1161,7 @@
                 <!-- Output (text delivery) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Output">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1100,8 +1203,7 @@
                 <!-- Voice Commands page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Voice Commands">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1306,8 +1408,7 @@
                 <!-- Dictionary (technical terms) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Dictionary">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1361,8 +1462,7 @@
                 <!-- Replacements (find-and-replace dictionary) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Replacements">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1433,8 +1533,7 @@
                 <!-- Rules (per-application prompt mode) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Rules">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1483,8 +1582,7 @@
                 <!-- History page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="History">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1524,8 +1622,7 @@
                 <!-- Pricing (cost estimation rates) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Pricing">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1572,8 +1669,7 @@
                 <!-- Backup (import/export) page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Backup">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1631,8 +1727,7 @@
                 <!-- Diagnostics page -->
                 <StackPanel>
                     <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed" />
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedSection}" Value="Diagnostics">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -1745,11 +1840,16 @@
                    Grid.ColumnSpan="2"
                    Margin="0,8,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Width="88"
+                <Button Width="96"
                         Margin="0,0,8,0"
-                        Content="_Save"
+                        Style="{StaticResource PrimaryButton}"
                         IsDefault="True"
-                        Command="{Binding SaveCommand}" />
+                        Command="{Binding SaveCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.Save}" />
+                        <AccessText Margin="7,0,0,0" VerticalAlignment="Center" Text="_Save" />
+                    </StackPanel>
+                </Button>
                 <Button Width="88"
                         Content="_Cancel"
                         IsCancel="True"
