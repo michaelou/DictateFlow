@@ -1,0 +1,109 @@
+<Window x:Class="DictateFlow.App.Views.DictatePadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Title="DictateFlow — DictatePad"
+        Width="1200"
+        Height="700"
+        MinWidth="640"
+        MinHeight="360"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar: prompt-mode picker + Enhance, with Copy / Undo / Clear on the right. -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <!-- Right-aligned action buttons -->
+            <Button DockPanel.Dock="Right"
+                    Width="36"
+                    Height="36"
+                    Margin="8,0,0,0"
+                    Style="{StaticResource IconButton}"
+                    ToolTip="Clear the scratchpad"
+                    Command="{Binding ClearCommand}">
+                <Path Style="{StaticResource FluentIcon}" Width="18" Height="18" Data="{StaticResource Icon.Broom}" />
+            </Button>
+            <Button DockPanel.Dock="Right"
+                    Width="36"
+                    Height="36"
+                    Margin="8,0,0,0"
+                    Style="{StaticResource IconButton}"
+                    ToolTip="Undo the last enhancement or clear"
+                    Command="{Binding UndoCommand}">
+                <Path Style="{StaticResource FluentIcon}" Width="18" Height="18" Data="{StaticResource Icon.ArrowSwap}" />
+            </Button>
+            <Button DockPanel.Dock="Right"
+                    Width="36"
+                    Height="36"
+                    Margin="8,0,0,0"
+                    Style="{StaticResource IconButton}"
+                    ToolTip="Copy all text to the clipboard"
+                    Command="{Binding CopyCommand}">
+                <Path Style="{StaticResource FluentIcon}" Width="18" Height="18" Data="{StaticResource Icon.Copy}" />
+            </Button>
+
+            <!-- Left-aligned: prompt-mode picker + Enhance -->
+            <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center"
+                           Margin="0,0,8,0"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           Text="Prompt type" />
+                <ComboBox VerticalAlignment="Center"
+                          Width="220"
+                          Height="36"
+                          ItemsSource="{Binding PromptModes}"
+                          SelectedItem="{Binding SelectedPromptMode}"
+                          ToolTip="The prompt mode applied to the whole text by Enhance" />
+                <Button Height="36"
+                        Margin="10,0,0,0"
+                        Padding="14,0"
+                        Style="{StaticResource PrimaryButton}"
+                        ToolTip="Run the LLM over the whole text with the chosen prompt type"
+                        Command="{Binding EnhanceCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}"
+                              Width="16"
+                              Height="16"
+                              Margin="0,0,6,0"
+                              VerticalAlignment="Center"
+                              Data="{StaticResource Icon.Wand}" />
+                        <TextBlock VerticalAlignment="Center" Text="Enhance" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Indeterminate progress while an enhancement runs. -->
+        <ProgressBar Grid.Row="1"
+                     Height="2"
+                     Margin="0,0,0,8"
+                     IsIndeterminate="True"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- The scratchpad itself: multiline, wrapping, scrollable. Dictation delivers here. -->
+        <TextBox Grid.Row="2"
+                 AcceptsReturn="True"
+                 AcceptsTab="True"
+                 FontSize="{StaticResource FontSizeBody}"
+                 Padding="10"
+                 Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                 TextWrapping="Wrap"
+                 SpellCheck.IsEnabled="True"
+                 VerticalContentAlignment="Top"
+                 VerticalScrollBarVisibility="Auto" />
+
+        <TextBlock Grid.Row="3"
+                   Margin="0,8,0,0"
+                   Foreground="{StaticResource SecondaryTextBrush}"
+                   Text="{Binding StatusMessage}" />
+    </Grid>
+</Window>

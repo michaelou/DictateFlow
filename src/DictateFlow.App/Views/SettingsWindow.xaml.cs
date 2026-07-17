@@ -14,6 +14,7 @@ public partial class SettingsWindow : Window
 {
     private readonly HotkeyCapture _pushToTalkCapture = new();
     private readonly HotkeyCapture _toggleCapture = new();
+    private readonly HotkeyCapture _dictatePadCapture = new();
 
     /// <summary>Initializes a new instance of the <see cref="SettingsWindow"/> class.</summary>
     public SettingsWindow()
@@ -50,6 +51,22 @@ public partial class SettingsWindow : Window
         if (DataContext is SettingsViewModel viewModel)
         {
             viewModel.CaptureToggleHotkey(modifiers, virtualKey);
+        }
+    }
+
+    /// <summary>Accumulates a chord for the DictatePad hotkey box.</summary>
+    private void OnDictatePadHotkeyPreviewKeyDown(object sender, KeyEventArgs e)
+        => OnHotkeyKeyDown(_dictatePadCapture, e, ApplyDictatePad);
+
+    /// <summary>Completes a modifier-only chord for the DictatePad hotkey box on release.</summary>
+    private void OnDictatePadHotkeyPreviewKeyUp(object sender, KeyEventArgs e)
+        => OnHotkeyKeyUp(_dictatePadCapture, e, ApplyDictatePad);
+
+    private void ApplyDictatePad(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey)
+    {
+        if (DataContext is SettingsViewModel viewModel)
+        {
+            viewModel.CaptureDictatePadHotkey(modifiers, virtualKey);
         }
     }
 

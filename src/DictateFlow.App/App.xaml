@@ -17,6 +17,7 @@
                 <tray:TaskbarIcon.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Dictate" Command="{Binding DictateCommand}" />
+                        <MenuItem Header="DictatePad" Command="{Binding OpenDictatePadCommand}" />
                         <MenuItem Header="Prompt Mode" ItemsSource="{Binding PromptModes}">
                             <MenuItem.ItemContainerStyle>
                                 <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">

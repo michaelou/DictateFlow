@@ -64,6 +64,9 @@ public partial class App : Application
             _host.Services.GetRequiredService<IDictationController>();
             _host.Services.GetRequiredService<IDictationFailureNotifier>();
 
+            // Arms the DictatePad hotkey→window bridge (subscribes in its constructor).
+            _host.Services.GetRequiredService<DictatePadHotkeyListener>();
+
             await _host.Services.GetRequiredService<ISettingsService>().LoadAsync();
 
             _trayIconService = _host.Services.GetRequiredService<ITrayIconService>();

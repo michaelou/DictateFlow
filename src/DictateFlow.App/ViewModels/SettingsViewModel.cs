@@ -260,6 +260,7 @@ public partial class SettingsViewModel : ObservableObject
         var recording = _settingsService.Current.Recording;
         _pushToTalkHotkey = recording.PushToTalkHotkey;
         _toggleHotkey = recording.ToggleHotkey;
+        _dictatePadHotkey = recording.DictatePadHotkey;
         _silenceTimeoutSeconds = recording.SilenceTimeoutSeconds;
         _enableStreamingTranscription = recording.EnableStreamingTranscription;
         _selectedMicrophone = options.FirstOrDefault(o => o.DeviceId == recording.MicrophoneDeviceId) ?? options[0];
@@ -428,6 +429,10 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the toggle hotkey in <c>"Ctrl+Alt+D"</c> format; empty disables it.</summary>
     [ObservableProperty]
     private string _toggleHotkey;
+
+    /// <summary>Gets or sets the DictatePad hotkey in <c>"Ctrl+Alt+D"</c> format; empty disables it.</summary>
+    [ObservableProperty]
+    private string _dictatePadHotkey;
 
     /// <summary>Gets or sets the validation message shown under the settings controls, if any.</summary>
     [ObservableProperty]
@@ -901,11 +906,30 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Applies a chord captured by the DictatePad hotkey textbox. See <see cref="CapturePushToTalkHotkey"/>.</summary>
+    /// <param name="modifiers">The side-specific modifier requirements held down.</param>
+    /// <param name="virtualKey">The virtual-key code of the pressed main key, or <see langword="null"/> for a modifier-only chord.</param>
+    public void CaptureDictatePadHotkey(IReadOnlyList<HotkeyModifier> modifiers, uint? virtualKey)
+    {
+        if (TryCaptureChord(modifiers, virtualKey, out var formatted))
+        {
+            DictatePadHotkey = formatted;
+        }
+    }
+
     /// <summary>Clears the push-to-talk hotkey, disabling that trigger.</summary>
     [RelayCommand]
     private void ClearPushToTalkHotkey()
     {
         PushToTalkHotkey = "";
+        ValidationError = null;
+    }
+
+    /// <summary>Clears the DictatePad hotkey, disabling that trigger.</summary>
+    [RelayCommand]
+    private void ClearDictatePadHotkey()
+    {
+        DictatePadHotkey = "";
         ValidationError = null;
     }
 
@@ -1034,6 +1058,7 @@ public partial class SettingsViewModel : ObservableObject
         var recording = _settingsService.Current.Recording;
         recording.PushToTalkHotkey = PushToTalkHotkey;
         recording.ToggleHotkey = ToggleHotkey;
+        recording.DictatePadHotkey = DictatePadHotkey;
         recording.MicrophoneDeviceId = SelectedMicrophone.DeviceId;
         recording.SilenceTimeoutSeconds = SilenceTimeoutSeconds;
         recording.EnableStreamingTranscription = EnableStreamingTranscription;

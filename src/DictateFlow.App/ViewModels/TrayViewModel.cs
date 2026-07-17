@@ -120,6 +120,11 @@ public partial class TrayViewModel : ObservableObject
     private void OpenCostDashboard()
         => _appActions.OpenCostDashboard();
 
+    /// <summary>Opens the DictatePad scratchpad window.</summary>
+    [RelayCommand]
+    private void OpenDictatePad()
+        => _appActions.OpenDictatePad();
+
     /// <summary>
     /// Checks GitHub for a newer release and shows the result dialog. The check itself never
     /// throws; offline/network failures are shown to the user as a graceful message.

@@ -123,6 +123,13 @@ public sealed class RecordingSettings
     /// </summary>
     public string ToggleHotkey { get; set; } = "";
 
+    /// <summary>
+    /// Gets or sets the hotkey that opens the DictatePad window: pressing this chord opens
+    /// (or focuses) the scratchpad. An empty value disables the hotkey; the pad can still be
+    /// opened from the tray menu. Independent of the recording hotkeys.
+    /// </summary>
+    public string DictatePadHotkey { get; set; } = "";
+
     /// <summary>Gets or sets the identifier of the microphone capture device; <see langword="null"/> selects the system default.</summary>
     public string? MicrophoneDeviceId { get; set; }
 
