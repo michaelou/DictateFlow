@@ -108,8 +108,9 @@ public sealed class WindowService : IWindowService
     /// <inheritdoc />
     public void ShowDictatePadWindow()
     {
-        if (TryActivate(_dictatePadWindow))
+        if (_dictatePadWindow is not null)
         {
+            BringToForeground(_dictatePadWindow);
             return;
         }
 
@@ -123,7 +124,31 @@ public sealed class WindowService : IWindowService
 
         _dictatePadWindow = window;
         window.Show();
+        BringToForeground(window);
+    }
+
+    /// <summary>
+    /// Brings a window to the front and focuses it. Opening from the global hotkey happens
+    /// while another application owns the foreground, so Windows suppresses a plain
+    /// <see cref="Window.Activate"/>; briefly toggling <see cref="Window.Topmost"/> forces the
+    /// window above the others without pinning it there.
+    /// </summary>
+    /// <param name="window">The window to surface.</param>
+    private static void BringToForeground(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+
+        window.Show();
         window.Activate();
+
+        var wasTopmost = window.Topmost;
+        window.Topmost = true;
+        window.Topmost = wasTopmost;
+
+        window.Focus();
     }
 
     /// <inheritdoc />
