@@ -115,6 +115,9 @@ public sealed class WindowService : IWindowService
 
         var viewModel = _serviceProvider.GetRequiredService<DictatePadViewModel>();
         var window = new DictatePadWindow { DataContext = viewModel };
+        // Capture the scratchpad text into settings before TrackPlacement's Closing handler
+        // saves, so a single write persists both the text and the placement.
+        window.Closing += (_, _) => viewModel.SaveState();
         window.Closed += (_, _) => _dictatePadWindow = null;
         TrackPlacement(window, "DictatePad");
 
@@ -141,6 +144,31 @@ public sealed class WindowService : IWindowService
         _updateWindow = window;
         window.Show();
         window.Activate();
+    }
+
+    /// <inheritdoc />
+    public void SaveDictatePadState()
+    {
+        if (_dictatePadWindow?.DataContext is not DictatePadViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.SaveState();
+
+        // Synchronous on purpose: called from App.OnExit, where a fire-and-forget write may not
+        // flush before the process exits. Whichever save (this or the close-time placement save)
+        // opens the file first wins; the other throws a sharing violation we swallow here.
+        var settingsService = _serviceProvider.GetRequiredService<ISettingsService>();
+        try
+        {
+            settingsService.SaveAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _serviceProvider.GetRequiredService<ILogger<WindowService>>()
+                .LogWarning(ex, "Could not persist the DictatePad text on shutdown");
+        }
     }
 
     /// <summary>

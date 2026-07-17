@@ -44,4 +44,11 @@ public interface IWindowService
     /// </summary>
     /// <param name="result">The update-check outcome to present.</param>
     void ShowUpdateWindow(UpdateCheckResult result);
+
+    /// <summary>
+    /// If the DictatePad is open, captures its current text and persists settings
+    /// synchronously. Called on app shutdown so the scratchpad survives even when the process
+    /// exits before the window's normal close-time save can flush. A no-op when the pad is closed.
+    /// </summary>
+    void SaveDictatePadState();
 }

@@ -91,6 +91,7 @@
 
         <!-- The scratchpad itself: multiline, wrapping, scrollable. Dictation delivers here. -->
         <TextBox Grid.Row="2"
+                 x:Name="ScratchpadTextBox"
                  AcceptsReturn="True"
                  AcceptsTab="True"
                  FontSize="{StaticResource FontSizeBody}"

@@ -141,6 +141,27 @@ public sealed class DictatePadViewModelTests
     }
 
     [Fact]
+    public void Ctor_RestoresTextFromSettings()
+    {
+        _appSettings.DictatePadText = "left over notes";
+
+        var vm = CreateViewModel();
+
+        Assert.Equal("left over notes", vm.Text);
+    }
+
+    [Fact]
+    public void SaveState_WritesCurrentTextBackToSettings()
+    {
+        var vm = CreateViewModel();
+        vm.Text = "remember this";
+
+        vm.SaveState();
+
+        Assert.Equal("remember this", _appSettings.DictatePadText);
+    }
+
+    [Fact]
     public void Enhance_CanNotExecute_WhenTextIsBlank()
     {
         var vm = CreateViewModel();

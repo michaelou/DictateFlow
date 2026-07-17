@@ -67,6 +67,12 @@ public sealed class AppSettings
     /// M8), keyed by a stable window name (e.g. <c>Settings</c>, <c>History</c>).
     /// </summary>
     public Dictionary<string, WindowPlacement> WindowState { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the last DictatePad scratchpad text, persisted when the pad closes so
+    /// reopening restores it. Empty when the pad has never been used or was left empty.
+    /// </summary>
+    public string DictatePadText { get; set; } = "";
 }
 
 /// <summary>General application behavior settings.</summary>

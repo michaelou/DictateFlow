@@ -232,6 +232,17 @@ public partial class App : Application
     {
         _logger?.LogInformation("Application shutting down");
 
+        // Persist the DictatePad scratchpad while the host (and settings service) is still alive,
+        // so text left in an open pad survives a shutdown that never runs the window's close-time save.
+        try
+        {
+            _host?.Services.GetRequiredService<IWindowService>().SaveDictatePadState();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not persist the DictatePad state on shutdown");
+        }
+
         _trayIconService?.Dispose();
 
         if (_host is not null)

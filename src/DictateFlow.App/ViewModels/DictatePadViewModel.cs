@@ -53,6 +53,9 @@ public partial class DictatePadViewModel : ObservableObject
         _logger = logger;
 
         LoadPromptModes();
+
+        // Restore the text left in the pad last time it was closed so the user can keep going.
+        Text = _settingsService.Current.DictatePadText ?? "";
     }
 
     /// <summary>Gets the names of the prompt modes available for enhancement, ordered by name.</summary>
@@ -187,6 +190,13 @@ public partial class DictatePadViewModel : ObservableObject
     }
 
     private bool CanClear() => !string.IsNullOrEmpty(Text);
+
+    /// <summary>
+    /// Captures the current scratchpad text into settings so the next open restores it.
+    /// Only updates <see cref="ISettingsService.Current"/>; the caller persists it to disk
+    /// (the window's placement save on close covers this, avoiding a second concurrent write).
+    /// </summary>
+    public void SaveState() => _settingsService.Current.DictatePadText = Text;
 
     /// <summary>Loads the prompt modes and defaults the selection to the active mode.</summary>
     private void LoadPromptModes()
