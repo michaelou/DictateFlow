@@ -195,6 +195,11 @@ public static class ServiceCollectionExtensions
         // (overlay command state + sounds). Both are registered before the Core defaults so
         // their TryAdd fallbacks (fail-closed deny / no-op feedback) are skipped.
         services.AddSingleton<IAppActions, AppActions>();
+
+        // Bridges the global DictatePad hotkey to opening the window; materialized at startup so
+        // its DictatePadPressed subscription is armed, mirroring the dictation controller.
+        services.AddSingleton<DictatePadHotkeyListener>();
+
         services.AddSingleton<ICommandSoundPlayer, CommandSoundPlayer>();
         services.AddSingleton<ICommandConfirmationService, CommandConfirmationService>();
         services.AddSingleton<ICommandFeedback, CommandFeedbackService>();
@@ -239,6 +244,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<HistoryViewModel>();
         services.AddTransient<CostDashboardViewModel>();
+        services.AddTransient<DictatePadViewModel>();
 
         return services;
     }

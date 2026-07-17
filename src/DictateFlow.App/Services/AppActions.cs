@@ -36,6 +36,9 @@ public sealed class AppActions : IAppActions
     public void OpenCostDashboard() => OnUiThread(() => _windowService.ShowCostDashboardWindow());
 
     /// <inheritdoc />
+    public void OpenDictatePad() => OnUiThread(() => _windowService.ShowDictatePadWindow());
+
+    /// <inheritdoc />
     public async Task CheckForUpdatesAsync()
     {
         var result = await _updateService.CheckForUpdatesAsync().ConfigureAwait(false);

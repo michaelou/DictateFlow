@@ -21,6 +21,7 @@ public sealed class WindowService : IWindowService
     private SettingsWindow? _settingsWindow;
     private HistoryWindow? _historyWindow;
     private CostDashboardWindow? _costDashboardWindow;
+    private DictatePadWindow? _dictatePadWindow;
     private UpdateWindow? _updateWindow;
 
     /// <summary>Initializes a new instance of the <see cref="WindowService"/> class.</summary>
@@ -102,6 +103,24 @@ public sealed class WindowService : IWindowService
         window.Show();
         window.Activate();
         viewModel.RefreshCommand.Execute(null);
+    }
+
+    /// <inheritdoc />
+    public void ShowDictatePadWindow()
+    {
+        if (TryActivate(_dictatePadWindow))
+        {
+            return;
+        }
+
+        var viewModel = _serviceProvider.GetRequiredService<DictatePadViewModel>();
+        var window = new DictatePadWindow { DataContext = viewModel };
+        window.Closed += (_, _) => _dictatePadWindow = null;
+        TrackPlacement(window, "DictatePad");
+
+        _dictatePadWindow = window;
+        window.Show();
+        window.Activate();
     }
 
     /// <inheritdoc />

@@ -1,5 +1,6 @@
 using DictateFlow.App;
 using DictateFlow.App.Services;
+using DictateFlow.App.ViewModels;
 using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Services.Output;
 using DictateFlow.Core.Services;
@@ -184,6 +185,17 @@ public sealed class ServiceRegistrationTests : IDisposable
         Assert.Contains(definitions, d => d.ActionType == MockCommandAction.RegistrationName);
         Assert.Contains(definitions, d => d.Name == "Open Notepad" && d.ActionType == ProcessStartAction.RegistrationName);
         Assert.Contains(definitions, d => d.ActionType == OpenUrlAction.RegistrationName);
+    }
+
+    [Fact]
+    public void AddDictateFlow_ResolvesDictatePadServices()
+    {
+        using var provider = BuildProvider();
+
+        // The view model resolves (its enhancement dependencies are all satisfiable), and the
+        // hotkey→window listener resolves and subscribes without throwing.
+        Assert.NotNull(provider.GetRequiredService<DictatePadViewModel>());
+        Assert.NotNull(provider.GetRequiredService<DictatePadHotkeyListener>());
     }
 
     [Fact]

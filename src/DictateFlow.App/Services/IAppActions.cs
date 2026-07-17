@@ -20,6 +20,9 @@ public interface IAppActions
     /// <summary>Opens (or focuses) the Cost Dashboard window.</summary>
     void OpenCostDashboard();
 
+    /// <summary>Opens (or focuses) the DictatePad scratchpad window.</summary>
+    void OpenDictatePad();
+
     /// <summary>
     /// Checks GitHub for a newer release and shows the result dialog. The check never throws;
     /// offline/network failures come back as a graceful message in the dialog.

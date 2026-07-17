@@ -42,6 +42,7 @@ public sealed class HotkeyService : IHotkeyService
     private IntPtr _hookHandle;
     private ChordState? _toggleState;
     private ChordState? _pttState;
+    private ChordState? _dictatePadState;
 
     /// <summary>Initializes a new instance of the <see cref="HotkeyService"/> class.</summary>
     /// <param name="serviceProvider">Used to resolve the tray icon service for failure notifications.</param>
@@ -61,6 +62,9 @@ public sealed class HotkeyService : IHotkeyService
 
     /// <inheritdoc />
     public event EventHandler? PushToTalkReleased;
+
+    /// <inheritdoc />
+    public event EventHandler? DictatePadPressed;
 
     /// <inheritdoc />
     public void Apply(RecordingSettings settings)
@@ -89,18 +93,19 @@ public sealed class HotkeyService : IHotkeyService
         TearDown();
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
-        // The two hotkeys are independent: a failure or empty value in one never affects the other.
-        _toggleState = BuildState(settings.ToggleHotkey, "toggle", isToggle: true);
-        _pttState = BuildState(settings.PushToTalkHotkey, "push-to-talk", isToggle: false);
+        // The hotkeys are independent: a failure or empty value in one never affects the others.
+        _toggleState = BuildState(settings.ToggleHotkey, "toggle", ChordKind.Toggle);
+        _pttState = BuildState(settings.PushToTalkHotkey, "push-to-talk", ChordKind.PushToTalk);
+        _dictatePadState = BuildState(settings.DictatePadHotkey, "DictatePad", ChordKind.DictatePad);
 
-        if (_toggleState is not null || _pttState is not null)
+        if (_toggleState is not null || _pttState is not null || _dictatePadState is not null)
         {
             InstallHook();
         }
     }
 
     /// <summary>Parses <paramref name="hotkey"/> into a chord state; empty is skipped, unparseable is reported.</summary>
-    private ChordState? BuildState(string? hotkey, string label, bool isToggle)
+    private ChordState? BuildState(string? hotkey, string label, ChordKind kind)
     {
         if (string.IsNullOrWhiteSpace(hotkey))
         {
@@ -115,7 +120,7 @@ public sealed class HotkeyService : IHotkeyService
         }
 
         _logger.LogInformation("{Label} hotkey {Chord} armed via keyboard hook", label, chord);
-        return new ChordState(chord, isToggle);
+        return new ChordState(chord, kind);
     }
 
     private void InstallHook()
@@ -144,6 +149,7 @@ public sealed class HotkeyService : IHotkeyService
 
         _toggleState = null;
         _pttState = null;
+        _dictatePadState = null;
         _pressedModifierKeys.Clear();
     }
 
@@ -164,6 +170,7 @@ public sealed class HotkeyService : IHotkeyService
                 // reach the focused application.
                 var swallow = ProcessChord(_toggleState, info.VkCode, isDown, isUp);
                 swallow |= ProcessChord(_pttState, info.VkCode, isDown, isUp);
+                swallow |= ProcessChord(_dictatePadState, info.VkCode, isDown, isUp);
                 if (swallow)
                 {
                     return 1;
@@ -241,18 +248,30 @@ public sealed class HotkeyService : IHotkeyService
 
     private void Raise(ChordState state, bool pressed)
     {
-        if (state.IsToggle)
+        switch (state.Kind)
         {
-            // Toggle fires only on the rising edge; there is no release event.
-            if (pressed)
-            {
-                RaiseAsync(TogglePressed);
-            }
+            case ChordKind.Toggle:
+                // Toggle fires only on the rising edge; there is no release event.
+                if (pressed)
+                {
+                    RaiseAsync(TogglePressed);
+                }
 
-            return;
+                break;
+
+            case ChordKind.DictatePad:
+                // Opens the scratchpad; fires only on the rising edge, like toggle.
+                if (pressed)
+                {
+                    RaiseAsync(DictatePadPressed);
+                }
+
+                break;
+
+            default:
+                RaiseAsync(pressed ? PushToTalkPressed : PushToTalkReleased);
+                break;
         }
-
-        RaiseAsync(pressed ? PushToTalkPressed : PushToTalkReleased);
     }
 
     private void UpdateModifierState(uint vkCode, bool isDown)
@@ -306,14 +325,27 @@ public sealed class HotkeyService : IHotkeyService
         }
     }
 
+    /// <summary>Which event a chord raises when it fires.</summary>
+    private enum ChordKind
+    {
+        /// <summary>Push-to-talk: raises pressed on the rising edge and released on the falling edge.</summary>
+        PushToTalk,
+
+        /// <summary>Toggle: raises <see cref="TogglePressed"/> once on the rising edge.</summary>
+        Toggle,
+
+        /// <summary>DictatePad: raises <see cref="DictatePadPressed"/> once on the rising edge.</summary>
+        DictatePad,
+    }
+
     /// <summary>Per-chord runtime state tracked across key events.</summary>
-    private sealed class ChordState(HotkeyChord chord, bool isToggle)
+    private sealed class ChordState(HotkeyChord chord, ChordKind kind)
     {
         /// <summary>Gets the chord being watched.</summary>
         public HotkeyChord Chord { get; } = chord;
 
-        /// <summary>Gets a value indicating whether this is the toggle chord (fires once on press) rather than push-to-talk.</summary>
-        public bool IsToggle { get; } = isToggle;
+        /// <summary>Gets the event this chord raises when it fires.</summary>
+        public ChordKind Kind { get; } = kind;
 
         /// <summary>Gets or sets a value indicating whether the chord's main key is currently held (main-key chords only).</summary>
         public bool MainKeyDown { get; set; }

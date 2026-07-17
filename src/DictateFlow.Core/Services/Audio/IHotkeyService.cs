@@ -19,6 +19,9 @@ public interface IHotkeyService : IDisposable
     /// <summary>Raised when the push-to-talk chord's main key goes up.</summary>
     event EventHandler? PushToTalkReleased;
 
+    /// <summary>Raised when the DictatePad hotkey is pressed (opens the scratchpad window).</summary>
+    event EventHandler? DictatePadPressed;
+
     /// <summary>
     /// Registers the hotkeys from <paramref name="settings"/>, replacing any previous
     /// registration. Re-callable whenever settings change. Registration failures are
