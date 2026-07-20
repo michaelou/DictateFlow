@@ -73,6 +73,12 @@ public sealed class AppSettings
     /// reopening restores it. Empty when the pad has never been used or was left empty.
     /// </summary>
     public string DictatePadText { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the cloud recordings configuration: polling an Azure Blob Storage container
+    /// for uploaded <c>.m4a</c> recordings and transcribing new ones.
+    /// </summary>
+    public CloudRecordingsSettings CloudRecordings { get; set; } = new();
 }
 
 /// <summary>General application behavior settings.</summary>
@@ -267,6 +273,35 @@ public sealed class VoiceCommandSettings
 
     /// <summary>Gets or sets a value indicating whether command feedback sounds play (consumed by the app UI).</summary>
     public bool EnableSounds { get; set; } = true;
+}
+
+/// <summary>
+/// Cloud recordings settings. When <see cref="Enabled"/> is on, DictateFlow polls
+/// an Azure Blob Storage container for uploaded <c>.m4a</c> recordings every
+/// <see cref="PollingIntervalMinutes"/> minutes and transcribes any it has not already
+/// processed. The connection string carries the account key, so it is a credential handled
+/// like the provider API keys (masked in the UI, stored in <c>settings.json</c>). The blobs
+/// are never modified; processed blob names are tracked locally in the database.
+/// </summary>
+public sealed class CloudRecordingsSettings
+{
+    /// <summary>Gets or sets a value indicating whether cloud recording polling and transcription are active.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>Gets or sets the Azure Storage connection string used to reach the container (contains the account key).</summary>
+    public string ConnectionString { get; set; } = "";
+
+    /// <summary>Gets or sets the name of the blob container that holds the uploaded recordings.</summary>
+    public string ContainerName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets an optional blob name prefix (virtual folder) to restrict which blobs are
+    /// considered; empty scans the whole container.
+    /// </summary>
+    public string BlobPrefix { get; set; } = "";
+
+    /// <summary>Gets or sets how often, in minutes, the container is polled for new recordings.</summary>
+    public int PollingIntervalMinutes { get; set; } = 5;
 }
 
 /// <summary>Diagnostic logging settings.</summary>

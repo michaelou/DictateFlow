@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.Parak
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.OpenRouter", "src\DictateFlow.Providers.OpenRouter\DictateFlow.Providers.OpenRouter.csproj", "{89656EB1-0BF1-4FFB-804B-A3DBE5A9059B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DictateFlow.Providers.AzureBlobStorage", "src\DictateFlow.Providers.AzureBlobStorage\DictateFlow.Providers.AzureBlobStorage.csproj", "{93BAB816-8083-4CD6-8228-D69CC9E3CA72}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -173,6 +175,18 @@ Global
 		{89656EB1-0BF1-4FFB-804B-A3DBE5A9059B}.Release|x64.Build.0 = Release|Any CPU
 		{89656EB1-0BF1-4FFB-804B-A3DBE5A9059B}.Release|x86.ActiveCfg = Release|Any CPU
 		{89656EB1-0BF1-4FFB-804B-A3DBE5A9059B}.Release|x86.Build.0 = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|x64.Build.0 = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Debug|x86.Build.0 = Debug|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|Any CPU.Build.0 = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|x64.ActiveCfg = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|x64.Build.0 = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|x86.ActiveCfg = Release|Any CPU
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -186,5 +200,6 @@ Global
 		{D57BD824-32C2-4D56-A776-9526393A9778} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{39C8AE1D-AF0F-4225-884C-6119E8C1BC1F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{89656EB1-0BF1-4FFB-804B-A3DBE5A9059B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{93BAB816-8083-4CD6-8228-D69CC9E3CA72} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

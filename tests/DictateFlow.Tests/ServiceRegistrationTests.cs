@@ -1,10 +1,12 @@
 using DictateFlow.App;
 using DictateFlow.App.Services;
 using DictateFlow.App.ViewModels;
+using DictateFlow.App.Services.CloudRecordings;
 using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Services.Output;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.CloudRecordings;
 using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
@@ -196,6 +198,24 @@ public sealed class ServiceRegistrationTests : IDisposable
         // hotkey→window listener resolves and subscribes without throwing.
         Assert.NotNull(provider.GetRequiredService<DictatePadViewModel>());
         Assert.NotNull(provider.GetRequiredService<DictatePadHotkeyListener>());
+    }
+
+    [Fact]
+    public void AddDictateFlow_ResolvesCloudRecordingServices()
+    {
+        using var provider = BuildProvider();
+
+        Assert.NotNull(provider.GetRequiredService<ICloudRecordingSource>());
+        Assert.NotNull(provider.GetRequiredService<ICloudRecordingRepository>());
+        Assert.NotNull(provider.GetRequiredService<ICloudTranscriptionService>());
+        Assert.NotNull(provider.GetRequiredService<IAudioDecoder>());
+        // The review view model resolves its whole dependency graph (player, poller, source…).
+        Assert.NotNull(provider.GetRequiredService<CloudRecordingsViewModel>());
+        // The poller is registered both as a singleton and as a hosted service.
+        Assert.NotNull(provider.GetRequiredService<CloudRecordingPollerService>());
+        Assert.Contains(
+            provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(),
+            s => s is CloudRecordingPollerService);
     }
 
     [Fact]

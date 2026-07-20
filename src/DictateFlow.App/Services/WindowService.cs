@@ -22,6 +22,7 @@ public sealed class WindowService : IWindowService
     private HistoryWindow? _historyWindow;
     private CostDashboardWindow? _costDashboardWindow;
     private DictatePadWindow? _dictatePadWindow;
+    private CloudRecordingsWindow? _cloudRecordingsWindow;
     private UpdateWindow? _updateWindow;
 
     /// <summary>Initializes a new instance of the <see cref="WindowService"/> class.</summary>
@@ -125,6 +126,30 @@ public sealed class WindowService : IWindowService
         _dictatePadWindow = window;
         window.Show();
         BringToForeground(window);
+    }
+
+    /// <inheritdoc />
+    public void ShowCloudRecordingsWindow()
+    {
+        if (TryActivate(_cloudRecordingsWindow))
+        {
+            return;
+        }
+
+        var viewModel = _serviceProvider.GetRequiredService<CloudRecordingsViewModel>();
+        var window = new CloudRecordingsWindow { DataContext = viewModel };
+        // Release the audio player and event subscriptions when the window closes.
+        window.Closed += (_, _) =>
+        {
+            viewModel.Cleanup();
+            _cloudRecordingsWindow = null;
+        };
+        TrackPlacement(window, "CloudRecordings");
+
+        _cloudRecordingsWindow = window;
+        window.Show();
+        window.Activate();
+        viewModel.RefreshCommand.Execute(null);
     }
 
     /// <summary>

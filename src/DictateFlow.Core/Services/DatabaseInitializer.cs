@@ -5,8 +5,8 @@ namespace DictateFlow.Core.Services;
 
 /// <summary>
 /// Default <see cref="IDatabaseInitializer"/> implementation. Creates <c>dictateflow.db</c>
-/// and bootstraps the <c>History</c> (M5/M6) and <c>UsageRecords</c> (M6) tables using
-/// idempotent <c>CREATE TABLE IF NOT EXISTS</c> statements.
+/// and bootstraps the <c>History</c> (M5/M6), <c>UsageRecords</c> (M6) and
+/// <c>CloudRecordings</c> tables using idempotent <c>CREATE TABLE IF NOT EXISTS</c> statements.
 /// </summary>
 public sealed class DatabaseInitializer : IDatabaseInitializer
 {
@@ -29,6 +29,14 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             CompletionTokens INTEGER NULL,
             WordCount INTEGER NULL,
             EstimatedCost REAL NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS CloudRecordings (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            BlobName TEXT NOT NULL UNIQUE,
+            LastModifiedUtc TEXT NULL,
+            TranscribedUtc TEXT NOT NULL,
+            Transcript TEXT NULL,
+            DurationSeconds REAL NULL
         );
         """;
 

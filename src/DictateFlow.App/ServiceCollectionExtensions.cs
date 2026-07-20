@@ -1,10 +1,12 @@
 using DictateFlow.App.Services;
 using DictateFlow.App.Services.Audio;
+using DictateFlow.App.Services.CloudRecordings;
 using DictateFlow.App.Services.Commands;
 using DictateFlow.App.Services.Output;
 using DictateFlow.App.ViewModels;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.CloudRecordings;
 using DictateFlow.Core.Services.Commands;
 using DictateFlow.Core.Services.History;
 using DictateFlow.Core.Services.Llm;
@@ -20,6 +22,7 @@ using DictateFlow.Core.Services.Updates;
 using DictateFlow.Core.Services.Usage;
 using DictateFlow.Core.Services.Validation;
 using DictateFlow.Providers.Anthropic;
+using DictateFlow.Providers.AzureBlobStorage;
 using DictateFlow.Providers.AzureFoundry;
 using DictateFlow.Providers.AzureSpeech;
 using DictateFlow.Providers.Ollama;
@@ -29,6 +32,7 @@ using DictateFlow.Providers.WhisperCpp;
 using DictateFlow.Samples.NullOutput;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App;
@@ -239,12 +243,26 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IDictationFailureNotifier, DictationFailureNotifier>();
 
+        // Cloud recordings: poll an Azure Blob container for uploaded .m4a recordings
+        // and transcribe new ones with the active transcription provider. The blob source is the
+        // one vendor SDK (Azure.Storage.Blobs); everything else is Core/App. The poller is the
+        // app's first hosted service — registered as a singleton so the review VM can subscribe to
+        // its NewRecordingsTranscribed event, and added to the host to start with it.
+        services.AddAzureBlobRecordings();
+        services.AddSingleton<IAudioDecoder, MediaFoundationAudioDecoder>();
+        services.AddSingleton<ICloudRecordingRepository, SqliteCloudRecordingRepository>();
+        services.AddSingleton<ICloudTranscriptionService, CloudTranscriptionService>();
+        services.AddTransient<IRecordingPlayer, RecordingPlayer>();
+        services.AddSingleton<CloudRecordingPollerService>();
+        services.AddHostedService(sp => sp.GetRequiredService<CloudRecordingPollerService>());
+
         services.AddSingleton<TrayViewModel>();
         services.AddSingleton<OverlayViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<HistoryViewModel>();
         services.AddTransient<CostDashboardViewModel>();
         services.AddTransient<DictatePadViewModel>();
+        services.AddTransient<CloudRecordingsViewModel>();
 
         return services;
     }

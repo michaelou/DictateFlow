@@ -39,6 +39,9 @@ public sealed class AppActions : IAppActions
     public void OpenDictatePad() => OnUiThread(() => _windowService.ShowDictatePadWindow());
 
     /// <inheritdoc />
+    public void ShowCloudRecordings() => OnUiThread(() => _windowService.ShowCloudRecordingsWindow());
+
+    /// <inheritdoc />
     public async Task CheckForUpdatesAsync()
     {
         var result = await _updateService.CheckForUpdatesAsync().ConfigureAwait(false);

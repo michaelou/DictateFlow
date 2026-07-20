@@ -120,6 +120,11 @@ public partial class TrayViewModel : ObservableObject
     private void OpenCostDashboard()
         => _appActions.OpenCostDashboard();
 
+    /// <summary>Opens the Cloud Recordings review window.</summary>
+    [RelayCommand]
+    private void OpenCloudRecordings()
+        => _appActions.ShowCloudRecordings();
+
     /// <summary>Opens the DictatePad scratchpad window.</summary>
     [RelayCommand]
     private void OpenDictatePad()

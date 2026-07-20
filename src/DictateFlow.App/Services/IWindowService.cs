@@ -39,6 +39,12 @@ public interface IWindowService
     void ShowDictatePadWindow();
 
     /// <summary>
+    /// Shows the Cloud Recordings review window. If it is already open, the existing instance
+    /// is restored and focused instead of creating a second one.
+    /// </summary>
+    void ShowCloudRecordingsWindow();
+
+    /// <summary>
     /// Shows the "Check for updates" dialog for the given check <paramref name="result"/>.
     /// If it is already open, the existing instance is replaced with the new result.
     /// </summary>

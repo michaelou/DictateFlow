@@ -50,6 +50,7 @@ public sealed class SettingsValidator : ISettingsValidator
         ValidatePricing(settings.Pricing, findings);
         ValidatePromptModes(settings, findings);
         ValidateVoiceCommands(settings.VoiceCommands, findings);
+        ValidateCloudRecordings(settings.CloudRecordings, findings);
 
         return [.. findings.OrderBy(f => f.Severity)];
     }
@@ -261,6 +262,36 @@ public sealed class SettingsValidator : ISettingsValidator
         if (voiceCommands.CommandTimeoutSeconds is < 1 or > 600)
         {
             findings.Add(Error("Voice Commands", "Command timeout must be between 1 and 600 seconds."));
+        }
+    }
+
+    /// <summary>
+    /// Cloud recording settings only matter while the feature is enabled; a disabled section
+    /// stays silent. When enabled, the connection string and container are required and the
+    /// polling interval must be at least a minute. A bad config just means the poller no-ops —
+    /// unlike Speech/LLM there is no in-memory fallback, so these are still errors surfaced in
+    /// the Settings UI.
+    /// </summary>
+    private static void ValidateCloudRecordings(CloudRecordingsSettings cloud, List<SettingsValidationError> findings)
+    {
+        if (!cloud.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(cloud.ConnectionString))
+        {
+            findings.Add(Error("Cloud Recordings", "An Azure Storage connection string is required while cloud recordings are enabled."));
+        }
+
+        if (string.IsNullOrWhiteSpace(cloud.ContainerName))
+        {
+            findings.Add(Error("Cloud Recordings", "A container name is required while cloud recordings are enabled."));
+        }
+
+        if (cloud.PollingIntervalMinutes < 1)
+        {
+            findings.Add(Error("Cloud Recordings", "The polling interval must be at least 1 minute."));
         }
     }
 
