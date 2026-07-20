@@ -8,6 +8,7 @@ using DictateFlow.App.Services.CloudRecordings;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.CloudRecordings;
+using DictateFlow.Core.Services.Prompts;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.App.ViewModels;
@@ -66,13 +67,20 @@ public sealed class CloudRecordingItem
 /// </summary>
 public partial class CloudRecordingsViewModel : ObservableObject
 {
+    /// <summary>The "no enhancement" option shown first in the prompt-mode selector (empty in settings).</summary>
+    private const string NoEnhancementOption = "None (raw transcript)";
+
     private readonly ICloudRecordingRepository _repository;
     private readonly ICloudTranscriptionService _cloudTranscription;
     private readonly ICloudRecordingSource _source;
     private readonly IRecordingPlayer _player;
     private readonly CloudRecordingPollerService _poller;
     private readonly ISettingsService _settingsService;
+    private readonly IPromptModeStore _promptModeStore;
     private readonly ILogger<CloudRecordingsViewModel> _logger;
+
+    /// <summary>Guards the settings write while the selector is being populated from settings.</summary>
+    private bool _suppressModePersist;
 
     /// <summary>Local temp files downloaded for playback, keyed by blob name, cleaned up on close.</summary>
     private readonly Dictionary<string, string> _playbackCache = new(StringComparer.Ordinal);
@@ -92,6 +100,7 @@ public partial class CloudRecordingsViewModel : ObservableObject
     /// <param name="player">Plays the downloaded recording.</param>
     /// <param name="poller">The background poller; its event refreshes the list when new items arrive.</param>
     /// <param name="settingsService">Reports whether the feature is configured, for the status hint.</param>
+    /// <param name="promptModeStore">Supplies the prompt modes offered in the enhancement selector.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public CloudRecordingsViewModel(
         ICloudRecordingRepository repository,
@@ -100,6 +109,7 @@ public partial class CloudRecordingsViewModel : ObservableObject
         IRecordingPlayer player,
         CloudRecordingPollerService poller,
         ISettingsService settingsService,
+        IPromptModeStore promptModeStore,
         ILogger<CloudRecordingsViewModel> logger)
     {
         _repository = repository;
@@ -108,6 +118,7 @@ public partial class CloudRecordingsViewModel : ObservableObject
         _player = player;
         _poller = poller;
         _settingsService = settingsService;
+        _promptModeStore = promptModeStore;
         _logger = logger;
 
         _player.StateChanged += OnPlayerStateChanged;
@@ -115,6 +126,8 @@ public partial class CloudRecordingsViewModel : ObservableObject
 
         _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _positionTimer.Tick += (_, _) => UpdatePositionFromPlayer();
+
+        LoadPromptModes();
     }
 
     /// <summary>Gets or sets the recordings currently shown, newest first.</summary>
@@ -132,6 +145,21 @@ public partial class CloudRecordingsViewModel : ObservableObject
     /// <summary>Gets or sets the status line under the list.</summary>
     [ObservableProperty]
     private string? _statusMessage;
+
+    /// <summary>
+    /// Gets or sets the prompt-mode options for the enhancement selector: the "no enhancement"
+    /// option first, then every loaded prompt mode by name.
+    /// </summary>
+    [ObservableProperty]
+    private IReadOnlyList<string> _promptModeOptions = [NoEnhancementOption];
+
+    /// <summary>
+    /// Gets or sets the prompt mode applied to new recordings after transcription. Changing it
+    /// persists to <see cref="CloudRecordingsSettings.PromptMode"/> so the background poller uses
+    /// the same choice. The "no enhancement" option maps to an empty setting.
+    /// </summary>
+    [ObservableProperty]
+    private string _selectedPromptMode = NoEnhancementOption;
 
     /// <summary>Gets or sets the short name of the recording currently loaded for playback.</summary>
     [ObservableProperty]
@@ -166,6 +194,54 @@ public partial class CloudRecordingsViewModel : ObservableObject
     }
 
     partial void OnDurationSecondsChanged(double value) => OnPropertyChanged(nameof(DurationText));
+
+    /// <summary>Persists the chosen enhancement mode so a later check (and the poller) apply it.</summary>
+    partial void OnSelectedPromptModeChanged(string value)
+    {
+        if (_suppressModePersist)
+        {
+            return;
+        }
+
+        var modeName = string.Equals(value, NoEnhancementOption, StringComparison.Ordinal) ? "" : value;
+        if (string.Equals(_settingsService.Current.CloudRecordings.PromptMode, modeName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _settingsService.Current.CloudRecordings.PromptMode = modeName;
+        _ = PersistPromptModeAsync();
+    }
+
+    /// <summary>Populates the selector from the loaded prompt modes and current setting.</summary>
+    private void LoadPromptModes()
+    {
+        var options = new List<string> { NoEnhancementOption };
+        options.AddRange(_promptModeStore.GetAll().Select(m => m.Name));
+
+        _suppressModePersist = true;
+        PromptModeOptions = options;
+
+        var configured = _settingsService.Current.CloudRecordings.PromptMode;
+        SelectedPromptMode = string.IsNullOrEmpty(configured)
+            ? NoEnhancementOption
+            : options.FirstOrDefault(o => string.Equals(o, configured, StringComparison.OrdinalIgnoreCase))
+                ?? NoEnhancementOption;
+        _suppressModePersist = false;
+    }
+
+    /// <summary>Saves settings after the enhancement mode changes; a failed write must not disrupt the UI.</summary>
+    private async Task PersistPromptModeAsync()
+    {
+        try
+        {
+            await _settingsService.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not persist the cloud recordings enhancement mode");
+        }
+    }
 
     /// <summary>Loads the stored recordings, newest first.</summary>
     [RelayCommand]
@@ -261,7 +337,11 @@ public partial class CloudRecordingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Deletes one stored recording (the blob is left untouched) and refreshes the list.</summary>
+    /// <summary>
+    /// Deletes one stored recording and also removes the recording blob from Azure storage, then
+    /// refreshes the list. The blob is deleted first so a failed delete leaves the transcription
+    /// in place (rather than losing the entry while the blob lingers).
+    /// </summary>
     /// <param name="item">The recording to delete.</param>
     [RelayCommand]
     private async Task DeleteAsync(CloudRecordingItem? item)
@@ -272,10 +352,10 @@ public partial class CloudRecordingsViewModel : ObservableObject
         }
 
         var confirmed = MessageBox.Show(
-            "Remove this transcription from the list? The recording stays in your Azure container, so a later check will transcribe it again.",
+            "Delete this recording? This permanently removes the audio file from your Azure container and deletes the transcription. This cannot be undone.",
             "DictateFlow",
             MessageBoxButton.YesNo,
-            MessageBoxImage.Question) == MessageBoxResult.Yes;
+            MessageBoxImage.Warning) == MessageBoxResult.Yes;
         if (!confirmed)
         {
             return;
@@ -283,13 +363,25 @@ public partial class CloudRecordingsViewModel : ObservableObject
 
         try
         {
+            IsBusy = true;
+            StatusMessage = "Deleting recording…";
+            await _source.DeleteAsync(item.Entry.BlobName, CancellationToken.None);
             await _repository.DeleteAsync(item.Entry.Id);
             await RefreshAsync(CancellationToken.None);
+        }
+        catch (ProviderException ex)
+        {
+            _logger.LogWarning(ex, "Could not delete cloud recording blob '{Blob}'", item.Entry.BlobName);
+            StatusMessage = ex.Message;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Could not delete cloud recording {Id}", item.Entry.Id);
-            StatusMessage = "Could not delete the entry.";
+            StatusMessage = "Could not delete the recording — see the log for details.";
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 

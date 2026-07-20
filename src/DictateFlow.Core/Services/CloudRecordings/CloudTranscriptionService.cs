@@ -1,7 +1,11 @@
 using System.IO;
 using DictateFlow.Core.Models;
 using DictateFlow.Core.Services.Audio;
+using DictateFlow.Core.Services.History;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
+using DictateFlow.Core.Text;
 using Microsoft.Extensions.Logging;
 
 namespace DictateFlow.Core.Services.CloudRecordings;
@@ -9,10 +13,12 @@ namespace DictateFlow.Core.Services.CloudRecordings;
 /// <summary>
 /// Default <see cref="ICloudTranscriptionService"/> implementation. Lists the configured
 /// container, and for every blob not already in the local database downloads it, decodes the
-/// <c>.m4a</c> to 16 kHz/16-bit/mono WAV, runs it through the active transcription provider and
-/// stores the transcript. Per-recording failures are logged and skipped so one bad file never
-/// aborts the batch. Temporary files live under <c>%TEMP%\DictateFlow\CloudRecordings</c> and
-/// are cleaned up after each recording.
+/// <c>.m4a</c> to 16 kHz/16-bit/mono WAV, runs it through the active transcription provider,
+/// optionally enhances the transcript with the configured prompt mode, and stores the result.
+/// Each stored recording is also written to the dictation history and counted in the usage
+/// metrics. Per-recording failures are logged and skipped so one bad file never aborts the
+/// batch. Temporary files live under <c>%TEMP%\DictateFlow\CloudRecordings</c> and are cleaned
+/// up after each recording.
 /// </summary>
 public sealed class CloudTranscriptionService : ICloudTranscriptionService
 {
@@ -20,6 +26,11 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
     private readonly ICloudRecordingRepository _repository;
     private readonly IAudioDecoder _decoder;
     private readonly ITranscriptionProvider _transcriptionProvider;
+    private readonly IPromptResolver _promptResolver;
+    private readonly ILLMProvider _llmProvider;
+    private readonly IHistoryRepository _historyRepository;
+    private readonly IUsageSink _usageSink;
+    private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<CloudTranscriptionService> _logger;
 
@@ -28,6 +39,11 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
     /// <param name="repository">Tracks which blobs have been transcribed and stores the transcripts.</param>
     /// <param name="decoder">Decodes the downloaded <c>.m4a</c> to the WAV format the provider expects.</param>
     /// <param name="transcriptionProvider">The active transcription provider (resolved per call).</param>
+    /// <param name="promptResolver">Builds the LLM prompt context for the configured prompt mode.</param>
+    /// <param name="llmProvider">Enhances the transcript with the active LLM provider (resolved per call).</param>
+    /// <param name="historyRepository">Records each stored recording in the dictation history.</param>
+    /// <param name="usageSink">Records the dictated word count so cloud recordings appear in the usage counters.</param>
+    /// <param name="settingsService">Supplies the configured prompt mode, read per run.</param>
     /// <param name="timeProvider">Timestamps the stored transcriptions (replaceable in tests).</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public CloudTranscriptionService(
@@ -35,6 +51,11 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
         ICloudRecordingRepository repository,
         IAudioDecoder decoder,
         ITranscriptionProvider transcriptionProvider,
+        IPromptResolver promptResolver,
+        ILLMProvider llmProvider,
+        IHistoryRepository historyRepository,
+        IUsageSink usageSink,
+        ISettingsService settingsService,
         TimeProvider timeProvider,
         ILogger<CloudTranscriptionService> logger)
     {
@@ -42,6 +63,11 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
         _repository = repository;
         _decoder = decoder;
         _transcriptionProvider = transcriptionProvider;
+        _promptResolver = promptResolver;
+        _llmProvider = llmProvider;
+        _historyRepository = historyRepository;
+        _usageSink = usageSink;
+        _settingsService = settingsService;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -109,13 +135,23 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
                 result = await _transcriptionProvider.TranscribeAsync(wav, cancellationToken).ConfigureAwait(false);
             }
 
+            var rawTranscript = result.Text;
+            var (finalText, modeName) = await EnhanceAsync(rawTranscript, cancellationToken).ConfigureAwait(false);
+            var transcribedUtc = _timeProvider.GetUtcNow().UtcDateTime;
+
             await _repository.AddAsync(
                 blob.Name,
                 blob.LastModifiedUtc,
-                _timeProvider.GetUtcNow().UtcDateTime,
-                result.Text,
+                transcribedUtc,
+                finalText,
                 result.AudioDurationSeconds,
                 cancellationToken).ConfigureAwait(false);
+
+            // Surface the recording alongside dictations: a history entry plus a Dictation usage
+            // record (raw word count) so the counters include cloud recordings. Both are
+            // best-effort — a bookkeeping failure must not fail the transcription.
+            await RecordHistoryAndUsageAsync(finalText, rawTranscript, modeName, transcribedUtc, cancellationToken)
+                .ConfigureAwait(false);
 
             _logger.LogInformation("Transcribed cloud recording '{BlobName}'", blob.Name);
             return true;
@@ -133,6 +169,81 @@ public sealed class CloudTranscriptionService : ICloudTranscriptionService
         {
             TryDelete(audioPath);
             TryDelete(wavPath);
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured prompt mode to <paramref name="rawTranscript"/> via the active LLM
+    /// provider. Returns the raw transcript unchanged when no mode is configured, the mode has the
+    /// LLM disabled, or enhancement fails (logged, never thrown) so a recording is never lost to an
+    /// enhancement error. The second tuple item is the mode name actually applied, or
+    /// <see langword="null"/> when the transcript was stored raw.
+    /// </summary>
+    private async Task<(string FinalText, string? ModeName)> EnhanceAsync(
+        string rawTranscript, CancellationToken cancellationToken)
+    {
+        var modeName = _settingsService.Current.CloudRecordings.PromptMode?.Trim();
+        if (string.IsNullOrEmpty(modeName) || string.IsNullOrWhiteSpace(rawTranscript))
+        {
+            return (rawTranscript, null);
+        }
+
+        try
+        {
+            var context = _promptResolver.Resolve(rawTranscript, modeName);
+            if (!context.LlmEnabled)
+            {
+                return (rawTranscript, context.ModeName);
+            }
+
+            var enhanced = await _llmProvider.ProcessAsync(context, cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug(
+                "Enhanced cloud recording with mode '{ModeName}': {CharCount} characters", context.ModeName, enhanced.Length);
+            return (enhanced, context.ModeName);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not enhance a cloud recording with mode '{ModeName}'; storing the raw transcript", modeName);
+            return (rawTranscript, null);
+        }
+    }
+
+    /// <summary>
+    /// Writes the recording to history and records its dictated word count in the usage metrics.
+    /// Best-effort: any failure is logged and swallowed so bookkeeping never fails a transcription.
+    /// </summary>
+    private async Task RecordHistoryAndUsageAsync(
+        string finalText, string rawTranscript, string? modeName, DateTime timestampUtc, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _historyRepository.AddAsync(timestampUtc, finalText, rawTranscript, modeName, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not write a cloud recording to history");
+        }
+
+        try
+        {
+            // Uses the raw transcript's word count so the figure reflects words spoken, mirroring
+            // the dictation pipeline. The sink swallows its own failures.
+            _usageSink.Record(new UsageRecord(
+                timestampUtc,
+                UsageCategories.Dictation,
+                DurationSeconds: null,
+                PromptTokens: null,
+                CompletionTokens: null,
+                WordCount: WordCounter.CountWords(rawTranscript)));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not record cloud recording usage");
         }
     }
 

@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="{DynamicResource WindowBackgroundBrush}"
         Title="DictateFlow — Cloud Recordings"
-        Width="680"
-        Height="520"
-        MinWidth="520"
-        MinHeight="360"
+        Width="1200"
+        Height="740"
+        MinWidth="720"
+        MinHeight="480"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
@@ -46,6 +46,22 @@
                     Command="{Binding RefreshCommand}">
                 <Path Style="{StaticResource FluentIcon}" Width="18" Height="18" Data="{StaticResource Icon.Refresh}" />
             </Button>
+
+            <!-- Enhancement mode applied to each new recording after transcription. -->
+            <StackPanel DockPanel.Dock="Right"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center"
+                           Margin="0,0,6,0"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           Text="Enhance with" />
+                <ComboBox Width="180"
+                          VerticalAlignment="Center"
+                          ToolTip="LLM prompt mode applied to each recording after transcription"
+                          ItemsSource="{Binding PromptModeOptions}"
+                          SelectedItem="{Binding SelectedPromptMode}" />
+            </StackPanel>
 
             <Button Height="36"
                     HorizontalAlignment="Left"

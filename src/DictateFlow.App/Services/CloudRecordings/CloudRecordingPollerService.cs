@@ -1,4 +1,3 @@
-using DictateFlow.App.Services;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.CloudRecordings;
 using Microsoft.Extensions.Hosting;
@@ -21,27 +20,23 @@ public sealed class CloudRecordingPollerService : BackgroundService
 
     private readonly ICloudTranscriptionService _cloudTranscription;
     private readonly ISettingsService _settingsService;
-    private readonly ITrayIconService _trayIconService;
-    private readonly IAppActions _appActions;
+    private readonly ICloudRecordingNotifier _notifier;
     private readonly ILogger<CloudRecordingPollerService> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="CloudRecordingPollerService"/> class.</summary>
     /// <param name="cloudTranscription">Runs the list-download-decode-transcribe-store workflow.</param>
     /// <param name="settingsService">Supplies the enabled switch and polling interval, read per iteration.</param>
-    /// <param name="trayIconService">Announces new transcriptions with a tray notification.</param>
-    /// <param name="appActions">Opens the review window when the notification is clicked.</param>
+    /// <param name="notifier">Shows the persistent new-recordings notification.</param>
     /// <param name="logger">Receives diagnostic output.</param>
     public CloudRecordingPollerService(
         ICloudTranscriptionService cloudTranscription,
         ISettingsService settingsService,
-        ITrayIconService trayIconService,
-        IAppActions appActions,
+        ICloudRecordingNotifier notifier,
         ILogger<CloudRecordingPollerService> logger)
     {
         _cloudTranscription = cloudTranscription;
         _settingsService = settingsService;
-        _trayIconService = trayIconService;
-        _appActions = appActions;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -82,12 +77,7 @@ public sealed class CloudRecordingPollerService : BackgroundService
             }
 
             NewRecordingsTranscribed?.Invoke(this, count);
-            _trayIconService.ShowInfoNotification(
-                "DictateFlow",
-                count == 1
-                    ? "1 new recording transcribed. Click to review."
-                    : $"{count} new recordings transcribed. Click to review.",
-                onClick: _appActions.ShowCloudRecordings);
+            _notifier.ShowNewRecordings(count);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

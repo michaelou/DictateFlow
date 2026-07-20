@@ -2,9 +2,13 @@ using DictateFlow.Core.Models;
 using DictateFlow.Core.Services;
 using DictateFlow.Core.Services.Audio;
 using DictateFlow.Core.Services.CloudRecordings;
+using DictateFlow.Core.Services.History;
+using DictateFlow.Core.Services.Llm;
+using DictateFlow.Core.Services.Prompts;
 using DictateFlow.Core.Services.Transcription;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace DictateFlow.Tests;
 
@@ -21,6 +25,12 @@ public sealed class CloudTranscriptionServiceTests : IDisposable
     private readonly FakeRecordingSource _source = new();
     private readonly FakeAudioDecoder _decoder = new();
     private readonly FakeTranscriptionProvider _transcription = new();
+    private readonly Mock<IPromptResolver> _promptResolver = new();
+    private readonly Mock<ILLMProvider> _llmProvider = new();
+    private readonly Mock<IHistoryRepository> _history = new();
+    private readonly Mock<IUsageSink> _usageSink = new();
+    private readonly Mock<ISettingsService> _settingsService = new();
+    private readonly AppSettings _settings = new();
     private readonly CloudTranscriptionService _service;
 
     public CloudTranscriptionServiceTests()
@@ -28,8 +38,11 @@ public sealed class CloudTranscriptionServiceTests : IDisposable
         new DatabaseInitializer(_paths, NullLogger<DatabaseInitializer>.Instance)
             .InitializeAsync().GetAwaiter().GetResult();
         _repository = new SqliteCloudRecordingRepository(_paths, NullLogger<SqliteCloudRecordingRepository>.Instance);
+        _settingsService.SetupGet(s => s.Current).Returns(_settings);
         _service = new CloudTranscriptionService(
-            _source, _repository, _decoder, _transcription, TimeProvider.System,
+            _source, _repository, _decoder, _transcription,
+            _promptResolver.Object, _llmProvider.Object, _history.Object, _usageSink.Object,
+            _settingsService.Object, TimeProvider.System,
             NullLogger<CloudTranscriptionService>.Instance);
     }
 
@@ -95,6 +108,67 @@ public sealed class CloudTranscriptionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckAndTranscribeNew_StoresInHistoryAndRecordsUsage()
+    {
+        _source.Blobs = [Blob("clip.m4a")];
+
+        await _service.CheckAndTranscribeNewAsync(progress: null, CancellationToken.None);
+
+        _history.Verify(
+            h => h.AddAsync(
+                It.IsAny<DateTime>(), "transcript of clip.m4a", "transcript of clip.m4a", null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        _usageSink.Verify(
+            u => u.Record(It.Is<UsageRecord>(r =>
+                r.Category == UsageCategories.Dictation && r.WordCount == 3)),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndTranscribeNew_PromptModeConfigured_StoresEnhancedTranscript()
+    {
+        _settings.CloudRecordings.PromptMode = "Email";
+        _promptResolver
+            .Setup(r => r.Resolve("transcript of clip.m4a", "Email"))
+            .Returns(new PromptContext("system", "transcript of clip.m4a", 0.2, 1000, "Email"));
+        _llmProvider
+            .Setup(p => p.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("enhanced email body");
+        _source.Blobs = [Blob("clip.m4a")];
+
+        await _service.CheckAndTranscribeNewAsync(progress: null, CancellationToken.None);
+
+        var stored = Assert.Single(await _repository.GetAllAsync());
+        Assert.Equal("enhanced email body", stored.Transcript);
+        // History keeps the enhanced final text and the raw transcript, tagged with the mode.
+        _history.Verify(
+            h => h.AddAsync(
+                It.IsAny<DateTime>(), "enhanced email body", "transcript of clip.m4a", "Email",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndTranscribeNew_EnhancementFails_FallsBackToRawTranscript()
+    {
+        _settings.CloudRecordings.PromptMode = "Email";
+        _promptResolver
+            .Setup(r => r.Resolve(It.IsAny<string>(), "Email"))
+            .Returns(new PromptContext("system", "transcript of clip.m4a", 0.2, 1000, "Email"));
+        _llmProvider
+            .Setup(p => p.ProcessAsync(It.IsAny<PromptContext>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ProviderException("Mock", "llm down"));
+        _source.Blobs = [Blob("clip.m4a")];
+
+        var count = await _service.CheckAndTranscribeNewAsync(progress: null, CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var stored = Assert.Single(await _repository.GetAllAsync());
+        Assert.Equal("transcript of clip.m4a", stored.Transcript);
+    }
+
+    [Fact]
     public async Task CheckAndTranscribeNew_ListingFails_Throws()
     {
         _source.ThrowOnList = new ProviderException("AzureBlobStorage", "bad config", isConfigurationError: true);
@@ -117,6 +191,8 @@ public sealed class CloudTranscriptionServiceTests : IDisposable
 
         public async Task DownloadToFileAsync(string blobName, string destinationPath, CancellationToken cancellationToken)
             => await File.WriteAllTextAsync(destinationPath, blobName, cancellationToken);
+
+        public Task DeleteAsync(string blobName, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     /// <summary>Fake decoder that copies the (name-carrying) content to the WAV path.</summary>

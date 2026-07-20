@@ -28,4 +28,13 @@ public interface ICloudRecordingSource
     /// <param name="cancellationToken">Cancels the download.</param>
     /// <exception cref="ProviderException">The download failed.</exception>
     Task DownloadToFileAsync(string blobName, string destinationPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Permanently deletes one blob from the container. A no-op (not an error) when the blob is
+    /// already gone, so deleting a recording whose blob was removed elsewhere still succeeds.
+    /// </summary>
+    /// <param name="blobName">The blob name within the container.</param>
+    /// <param name="cancellationToken">Cancels the delete.</param>
+    /// <exception cref="ProviderException">The delete failed (bad config, auth, network).</exception>
+    Task DeleteAsync(string blobName, CancellationToken cancellationToken);
 }

@@ -105,6 +105,33 @@ public sealed class AzureBlobRecordingSource : ICloudRecordingSource
         _logger.LogDebug("Downloaded recording '{BlobName}' to '{Path}'", blobName, destinationPath);
     }
 
+    /// <inheritdoc />
+    public async Task DeleteAsync(string blobName, CancellationToken cancellationToken)
+    {
+        var container = CreateContainerClient();
+        var blob = container.GetBlobClient(blobName);
+
+        try
+        {
+            // DeleteIfExists so an already-removed blob is a success, not a 404 failure.
+            await blob.DeleteIfExistsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (RequestFailedException ex)
+        {
+            throw MapFailure(ex);
+        }
+        catch (Exception ex)
+        {
+            throw new ProviderException(ProviderName, $"Could not delete recording '{blobName}': {ex.Message}", ex);
+        }
+
+        _logger.LogDebug("Deleted recording '{BlobName}' from container '{Container}'", blobName, container.Name);
+    }
+
     /// <summary>Builds a container client from settings, validating the connection string and container name.</summary>
     private BlobContainerClient CreateContainerClient()
     {

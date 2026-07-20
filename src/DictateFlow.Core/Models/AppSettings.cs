@@ -302,6 +302,13 @@ public sealed class CloudRecordingsSettings
 
     /// <summary>Gets or sets how often, in minutes, the container is polled for new recordings.</summary>
     public int PollingIntervalMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets the name of the prompt mode applied to each recording after transcription
+    /// (LLM enhancement). Empty means no enhancement — the raw transcript is stored as-is.
+    /// Matched case-insensitively against the loaded prompt modes; an unknown mode is ignored.
+    /// </summary>
+    public string PromptMode { get; set; } = "";
 }
 
 /// <summary>Diagnostic logging settings.</summary>

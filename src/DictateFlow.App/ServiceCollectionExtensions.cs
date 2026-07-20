@@ -252,6 +252,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAudioDecoder, MediaFoundationAudioDecoder>();
         services.AddSingleton<ICloudRecordingRepository, SqliteCloudRecordingRepository>();
         services.AddSingleton<ICloudTranscriptionService, CloudTranscriptionService>();
+        services.AddSingleton<ICloudRecordingNotifier, CloudRecordingNotifier>();
         services.AddTransient<IRecordingPlayer, RecordingPlayer>();
         services.AddSingleton<CloudRecordingPollerService>();
         services.AddHostedService(sp => sp.GetRequiredService<CloudRecordingPollerService>());
