@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DictateFlow.Core\DictateFlow.Core.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.Anthropic\DictateFlow.Providers.Anthropic.csproj" />
+    <ProjectReference Include="..\DictateFlow.Providers.AzureBlobStorage\DictateFlow.Providers.AzureBlobStorage.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.AzureFoundry\DictateFlow.Providers.AzureFoundry.csproj" />
     <ProjectReference Include="..\DictateFlow.Providers.AzureSpeech\DictateFlow.Providers.AzureSpeech.csproj" />
     <ProjectReference Include="..\..\samples\DictateFlow.Samples.NullOutput\DictateFlow.Samples.NullOutput.csproj" />

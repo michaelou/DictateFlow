@@ -76,6 +76,70 @@ public sealed class SettingsValidatorTests
         Assert.Empty(findings);
     }
 
+    [Fact]
+    public void CloudRecordingsDisabled_HasNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.CloudRecordings.Enabled = false;
+        settings.CloudRecordings.ConnectionString = ""; // ignored while disabled
+
+        var findings = CreateValidator("Raw").Validate(settings);
+
+        Assert.DoesNotContain(findings, f => f.Section == "Cloud Recordings");
+    }
+
+    [Fact]
+    public void CloudRecordingsEnabled_FullyConfigured_HasNoFindings()
+    {
+        var settings = new AppSettings();
+        settings.CloudRecordings.Enabled = true;
+        settings.CloudRecordings.ConnectionString = "UseDevelopmentStorage=true";
+        settings.CloudRecordings.ContainerName = "recordings";
+        settings.CloudRecordings.PollingIntervalMinutes = 5;
+
+        var findings = CreateValidator("Raw").Validate(settings);
+
+        Assert.DoesNotContain(findings, f => f.Section == "Cloud Recordings");
+    }
+
+    [Fact]
+    public void CloudRecordingsEnabled_MissingConnectionString_IsError()
+    {
+        var settings = new AppSettings();
+        settings.CloudRecordings.Enabled = true;
+        settings.CloudRecordings.ContainerName = "recordings";
+
+        var finding = Single(CreateValidator("Raw").Validate(settings), "Cloud Recordings");
+        Assert.Equal(SettingsValidationSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void CloudRecordingsEnabled_MissingContainer_IsError()
+    {
+        var settings = new AppSettings();
+        settings.CloudRecordings.Enabled = true;
+        settings.CloudRecordings.ConnectionString = "UseDevelopmentStorage=true";
+        settings.CloudRecordings.ContainerName = "";
+
+        var findings = CreateValidator("Raw").Validate(settings);
+        Assert.Contains(findings, f => f.Section == "Cloud Recordings"
+            && f.Severity == SettingsValidationSeverity.Error);
+    }
+
+    [Fact]
+    public void CloudRecordingsEnabled_IntervalBelowOne_IsError()
+    {
+        var settings = new AppSettings();
+        settings.CloudRecordings.Enabled = true;
+        settings.CloudRecordings.ConnectionString = "UseDevelopmentStorage=true";
+        settings.CloudRecordings.ContainerName = "recordings";
+        settings.CloudRecordings.PollingIntervalMinutes = 0;
+
+        var findings = CreateValidator("Raw").Validate(settings);
+        Assert.Contains(findings, f => f.Section == "Cloud Recordings"
+            && f.Severity == SettingsValidationSeverity.Error);
+    }
+
     [Theory]
     [InlineData("NotAKey+Chord")]
     [InlineData("Ctrl+")]

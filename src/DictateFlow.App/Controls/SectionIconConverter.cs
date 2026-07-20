@@ -24,6 +24,7 @@ public sealed class SectionIconConverter : IValueConverter
         ["Output"] = "Icon.Keyboard",
         ["Voice Commands"] = "Icon.Wand",
         ["History"] = "Icon.History",
+        ["Cloud Recordings"] = "Icon.Download",
         ["Pricing"] = "Icon.Money",
         ["Backup"] = "Icon.Save",
         ["Diagnostics"] = "Icon.Wrench",

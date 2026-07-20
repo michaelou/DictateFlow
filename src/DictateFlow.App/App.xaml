@@ -33,6 +33,7 @@
                         <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}" />
                         <MenuItem Header="Voice Commands" Command="{Binding OpenVoiceCommandsCommand}" />
                         <MenuItem Header="History" Command="{Binding OpenHistoryCommand}" />
+                        <MenuItem Header="Cloud Recordings" Command="{Binding OpenCloudRecordingsCommand}" />
                         <MenuItem Header="Cost Dashboard" Command="{Binding OpenCostDashboardCommand}" />
                         <Separator />
                         <MenuItem Header="Check for Updates…" Command="{Binding CheckForUpdatesCommand}" />

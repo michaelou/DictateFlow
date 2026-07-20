@@ -148,6 +148,14 @@
                 </Button>
                 <Button Margin="0,2,0,0"
                         HorizontalContentAlignment="Left"
+                        Command="{Binding ShowCloudRecordingsCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.Download}" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Show Cloud Recordings" />
+                    </StackPanel>
+                </Button>
+                <Button Margin="0,2,0,0"
+                        HorizontalContentAlignment="Left"
                         Command="{Binding ShowCostDashboardCommand}">
                     <StackPanel Orientation="Horizontal">
                         <Path Style="{StaticResource FluentIcon}" Width="15" Height="15" Data="{StaticResource Icon.Money}" />
@@ -1628,6 +1636,66 @@
                                FontSize="11"
                                Margin="0,2,0,0"
                                Text="Oldest entries are removed once the cap is exceeded. Must be at least 1." />
+
+                    <TextBlock Margin="0,12,0,0"
+                               Foreground="{StaticResource ErrorBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ValidationError}" />
+                </StackPanel>
+
+                <!-- Cloud Recordings page -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel" BasedOn="{StaticResource SectionPage}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedSection}" Value="Cloud Recordings">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Text="Cloud Recordings" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Poll an Azure Blob Storage container for uploaded .m4a recordings and transcribe new ones with the active speech provider. The connection string is stored locally with your other credentials." />
+
+                    <CheckBox Margin="0,12,0,0"
+                              Content="Check for and transcribe new recordings automatically"
+                              IsChecked="{Binding CloudRecordingsEnabled}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Connection string" />
+                    <PasswordBox controls:PasswordBoxHelper.BoundPassword="{Binding CloudRecordingsConnectionString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Text="The Azure Storage account connection string (contains the account key)." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Container name" />
+                    <TextBox Text="{Binding CloudRecordingsContainerName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Blob prefix (optional)" />
+                    <TextBox Text="{Binding CloudRecordingsBlobPrefix, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               Text="Restrict to a virtual folder, e.g. recordings/. Leave empty to scan the whole container." />
+
+                    <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="Check every (minutes)" />
+                    <TextBox Width="80"
+                             HorizontalAlignment="Left"
+                             Text="{Binding CloudRecordingsPollingIntervalMinutes, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button Margin="0,16,0,0"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            Content="Open Cloud Recordings…"
+                            Command="{Binding ShowCloudRecordingsCommand}" />
 
                     <TextBlock Margin="0,12,0,0"
                                Foreground="{StaticResource ErrorBrush}"

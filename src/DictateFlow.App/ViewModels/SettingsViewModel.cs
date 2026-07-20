@@ -369,6 +369,13 @@ public partial class SettingsViewModel : ObservableObject
         _historyEnabled = history.Enabled;
         _historyMaxEntries = history.MaxEntries;
 
+        var cloud = _settingsService.Current.CloudRecordings;
+        _cloudRecordingsEnabled = cloud.Enabled;
+        _cloudRecordingsConnectionString = cloud.ConnectionString;
+        _cloudRecordingsContainerName = cloud.ContainerName;
+        _cloudRecordingsBlobPrefix = cloud.BlobPrefix;
+        _cloudRecordingsPollingIntervalMinutes = cloud.PollingIntervalMinutes;
+
         DictionaryTerms = [.. _settingsService.Current.TechnicalDictionary];
         ReplacementRules = [.. _settingsService.Current.Replacements
             .Select(r => new ReplacementRuleItem
@@ -405,7 +412,7 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Gets the navigation sections shown on the left side of the window.</summary>
     public IReadOnlyList<string> Sections { get; } =
-        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Replacements", "Rules", "Output", "Voice Commands", "History", "Pricing", "Backup", "Diagnostics"];
+        ["General", "Speech", "Local Models", "LLM", "Prompts", "Dictionary", "Replacements", "Rules", "Output", "Voice Commands", "History", "Cloud Recordings", "Pricing", "Backup", "Diagnostics"];
 
     /// <summary>Gets the selectable minimum log levels (Serilog level names).</summary>
     public IReadOnlyList<string> LogLevels { get; } =
@@ -710,6 +717,26 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Gets or sets the history entry cap (0 keeps everything).</summary>
     [ObservableProperty]
     private int _historyMaxEntries;
+
+    /// <summary>Gets or sets a value indicating whether cloud recording polling/transcription is enabled.</summary>
+    [ObservableProperty]
+    private bool _cloudRecordingsEnabled;
+
+    /// <summary>Gets or sets the Azure Storage connection string used to reach the recordings container.</summary>
+    [ObservableProperty]
+    private string _cloudRecordingsConnectionString = "";
+
+    /// <summary>Gets or sets the name of the blob container that holds the uploaded recordings.</summary>
+    [ObservableProperty]
+    private string _cloudRecordingsContainerName = "";
+
+    /// <summary>Gets or sets an optional blob-name prefix restricting which blobs are considered.</summary>
+    [ObservableProperty]
+    private string _cloudRecordingsBlobPrefix = "";
+
+    /// <summary>Gets or sets how often, in minutes, the container is polled for new recordings.</summary>
+    [ObservableProperty]
+    private int _cloudRecordingsPollingIntervalMinutes;
 
     /// <summary>Gets the editable technical dictionary terms.</summary>
     public ObservableCollection<string> DictionaryTerms { get; }
@@ -1079,6 +1106,13 @@ public partial class SettingsViewModel : ObservableObject
         history.Enabled = HistoryEnabled;
         history.MaxEntries = HistoryMaxEntries;
 
+        var cloud = _settingsService.Current.CloudRecordings;
+        cloud.Enabled = CloudRecordingsEnabled;
+        cloud.ConnectionString = CloudRecordingsConnectionString.Trim();
+        cloud.ContainerName = CloudRecordingsContainerName.Trim();
+        cloud.BlobPrefix = CloudRecordingsBlobPrefix.Trim();
+        cloud.PollingIntervalMinutes = CloudRecordingsPollingIntervalMinutes;
+
         _settingsService.Current.TechnicalDictionary = [.. DictionaryTerms];
         _settingsService.Current.Replacements = [.. ReplacementRules
             .Where(r => !string.IsNullOrWhiteSpace(r.From))
@@ -1220,6 +1254,10 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Opens the Cost Dashboard window (same action as the tray menu).</summary>
     [RelayCommand]
     private void ShowCostDashboard() => _windowService.ShowCostDashboardWindow();
+
+    /// <summary>Opens the Cloud Recordings review window (same action as the tray menu).</summary>
+    [RelayCommand]
+    private void ShowCloudRecordings() => _windowService.ShowCloudRecordingsWindow();
 
     /// <summary>
     /// Checks GitHub for a newer release and shows the result dialog (same action as the tray
